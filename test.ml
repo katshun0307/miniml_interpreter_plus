@@ -116,6 +116,10 @@ let match_tests = "match tests" >::: [
                                 typing_error
                                 (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::tl -> tl | [] -> 100"])
                             );
+    "int var same failure" >:: (fun _ -> assert_raises
+                                   (Eval.Error("match variable must not be same"))
+                                   (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::hd -> hd | [] -> 100"])
+                               );
   ]
 
 let tests = "all tests" >::: [decl_tests; recur_tests; list_tests; match_tests]

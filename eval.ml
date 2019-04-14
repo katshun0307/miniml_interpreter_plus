@@ -123,11 +123,13 @@ let rec eval_exp env = function
      | ListV content_list ->
        let rec loop_cases = function
          | (Conscase(hd_id, tl_id), e):: rest -> 
-           (match content_list with
-            | h::t -> 
-              let newenv = Environment.extend hd_id h (Environment.extend tl_id (ListV(t)) env) in
-              eval_exp newenv e
-            | [] -> loop_cases rest)
+           if hd_id = tl_id then raise (Error "match variable must not be same")
+           else
+             (match content_list with
+              | h::t -> 
+                let newenv = Environment.extend hd_id h (Environment.extend tl_id (ListV(t)) env) in
+                eval_exp newenv e
+              | [] -> loop_cases rest)
          | (Tailcase, e):: rest -> 
            (match content_list with
             | _::_ -> loop_cases rest
@@ -135,8 +137,6 @@ let rec eval_exp env = function
          | [] -> raise (Error "does not match any case") in
        loop_cases case_list
      | _ -> raise (Error "match expression must be applied to list"))
-
-
 
 
 let eval_decl env = function
