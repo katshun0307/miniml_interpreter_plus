@@ -1,0 +1,7 @@
+_build/
+miniml
+*.txt
+_tags
+lexer.ml
+parser.ml
+.merlin
