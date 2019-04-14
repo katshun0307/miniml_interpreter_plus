@@ -125,4 +125,5 @@ let match_tests = "match tests" >::: [
 let tests = "all tests" >::: [decl_tests; recur_tests; list_tests; match_tests]
 
 let run_test () = 
+  print_string "running tests...\n";
   run_test_tt_main tests
