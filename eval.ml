@@ -137,8 +137,6 @@ let rec eval_exp env = function
      | _ -> raise (Error "match expression must be applied to list"))
 
 
-
-
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
   | Decl (id, e) -> let v = eval_exp env e in (id, Environment.extend id v env, v)
