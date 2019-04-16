@@ -180,20 +180,28 @@ let rec ty_exp tyenv = function
     (* unify all eqls *)
     let main_subst = unify( (e1_ty, ty_x) ::eqls_of_subst e1_subst @ eqls_of_subst e2_subst) in
     (subst_type main_subst e2_ty, main_subst)
-  | MatchExp (case_exp, case_list) ->
+  | MatchExp (case_exp, case_list) -> 
     let case_ty, case_subst = ty_exp tyenv case_exp in
     (match case_ty with
      | TyList list_ty -> 
        let return_ty = TyVar (fresh_tyvar ()) in
-       let rec loop_cases l eqls_accum = 
+       (* loop through match patterns making eqls conditions *)
+       let rec loop_cases l eqls_cases = 
+         (* make type environment for a single match pattern *)
+         let rec make_case_env case accum_env = 
+           (match case with
+            | Cons(hd_id, next) -> 
+              make_case_env next (Environment.extend hd_id list_ty accum_env)  
+            | Id i -> (Environment.extend i (TyList list_ty) accum_env)
+            | Tail -> tyenv
+           ) (* end of make_case_env *)
+         in
+         (* loop through cases *)
          (match l with
-          | (Syntax.Conscase(hd_id, tl_id), e):: tl -> 
-            let e_ty, e_subst = ty_exp (Environment.extend hd_id list_ty (Environment.extend tl_id (TyList list_ty) tyenv)) e in
-            loop_cases tl ((e_ty, return_ty)::(eqls_of_subst e_subst) @ eqls_accum)
-          | (Syntax.Tailcase, e):: tl -> 
-            let e_ty, e_subst = ty_exp tyenv e in
-            loop_cases tl ((e_ty, return_ty):: (eqls_of_subst e_subst)@ eqls_accum)
-          | [] -> eqls_accum) in
+          | (matchcase, e):: tl -> 
+            let e_ty, e_subst = ty_exp (make_case_env matchcase tyenv) e in
+            loop_cases tl ((e_ty, return_ty)::(eqls_of_subst e_subst) @ eqls_cases)
+          | [] -> eqls_cases) in 
        let eqls = loop_cases case_list [] in
        let main_subst =  unify eqls in
        (subst_type main_subst return_ty, main_subst)

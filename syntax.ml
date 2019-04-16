@@ -11,8 +11,9 @@ type binOp = Plus | Mult | Lt
 type logicOp = And | Or
 
 type match_case = 
-  | Tailcase 
-  | Conscase of id * id 
+  | Tail 
+  | Id of id
+  | Cons of id * match_case
 
 type exp =
   | Var of id (* Var "x" --> x *)
