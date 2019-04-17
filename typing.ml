@@ -3,12 +3,19 @@ open MySet
 (* open Core *)
 
 exception Error of string
+exception MatchNotExhaustive
 
 let err s = raise (Error s)
 
 (* type environment *)
 type tyenv = ty Environment.t
 type subst = (tyvar * ty) list
+
+(* exhaustive pattern checking *)
+type match_res = 
+  | Match
+  | NoMatch
+  | Undecidable
 
 (* printing *)
 let rec string_of_subst = function 
@@ -92,6 +99,33 @@ let type_list_to_equals l =
     | hd:: tl -> loop ((hd,(List.hd tl))::accum) tl
     | [] -> raise (Error "entered unexpected case") in
   loop [] l
+
+(* check is pattern matching is exhasutive *)
+let rec subst_tail = function
+  | Cons(a, rest) ->  Cons(a, subst_tail rest)
+  | Tail -> Tail
+  | Id _ -> Tail
+
+let check_pattern_exhaustive pattern_list =
+  (* check ideal pattern matches current pattern. (ideal, current) *)
+  let rec matches = function 
+    | Cons(_, rest), Cons(_, rest2) -> matches (rest, rest2)
+    | Tail, Tail | _, Id _ -> Match
+    | Cons(_, _), Tail | Tail, Cons(_, _) -> NoMatch
+    | Id _, Tail | Id _, Cons(_, _) -> Undecidable in
+  let rec sigma ideal_pattern patterns =
+    let match_flags = Core.List.map patterns ~f:(fun p -> matches (ideal_pattern, p)) in
+    if Core.List.exists match_flags ~f:(fun x -> x = Match) 
+    then (* there is a match *)
+      ()
+    else if Core.List.exists match_flags ~f:(fun x -> x = Undecidable)
+    then (* nothing decidable:increment the ideal pattern *)
+      (sigma (subst_tail ideal_pattern) patterns;
+       sigma (Cons("a", ideal_pattern)) patterns)
+    else (* there is no match *)
+      raise MatchNotExhaustive
+  in
+  sigma (Id "_") pattern_list
 
 let rec ty_exp tyenv = function
   | Var x -> 
@@ -182,6 +216,8 @@ let rec ty_exp tyenv = function
     (subst_type main_subst e2_ty, main_subst)
   | MatchExp (case_exp, case_list) -> 
     let case_ty, case_subst = ty_exp tyenv case_exp in
+    (* check pattern exhaustive *)
+    check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> p));
     (match case_ty with
      | TyList list_ty -> 
        let return_ty = TyVar (fresh_tyvar ()) in
