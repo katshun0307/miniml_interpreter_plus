@@ -26,7 +26,7 @@ type exp =
            ILit 3, 
            Var "x") --> 
      if x<4 then 3 else x *)
-  | MultiLetExp of (id * exp) list * exp  
+  | MultiLetExp of (id * exp) list * exp
   | FunExp of id list * exp (* static function expression *)
   | DFunExp of id * exp (* dynamic function expression *)
   | AppExp of exp * exp (* function application expression *)
@@ -51,6 +51,13 @@ type ty =
   | TyFun of ty * ty
   | TyList of ty
   | TyTuple of ty * ty
+
+(* type scheme *)
+type tysc = TyScheme of tyvar list * ty
+
+let tysc_of_ty t = TyScheme([], t)
+
+let ty_of_tysc (TyScheme(_, ty)) = ty
 
 let tyvar_string_of_int n =
   (* 26 * block + offset *)
@@ -95,6 +102,11 @@ let rec string_of_ty = function
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
 
+let string_of_tysc = function
+  | TyScheme(bl, ty) -> 
+    let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map (fun b -> tyvar_string_of_int b) bl) ^ "]" in
+    bound_vars ^ string_of_ty ty
+
 (* returns new type variables with fresh_tyvar() *)
 let fresh_tyvar = 
   let counter = ref 0 in
@@ -111,3 +123,20 @@ let freevar_ty ty_in =
      | TyFun(a, b) -> MySet.union (loop a current) (loop b current)
      | _ -> current) in
   loop ty_in MySet.empty
+
+(* 与えられた型スキーム中の自由変数の集合を返す関数 *)
+let freevar_tysc (TyScheme(b, ty)) = 
+  let bounds = MySet.from_list b in
+  let rec loop ty = 
+    match ty with
+    | TyInt | TyBool -> MySet.empty
+    | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
+    | TyList t1 -> loop t1
+    | TyVar v -> 
+      if MySet.member v bounds
+      then MySet.empty
+      else MySet.singleton v
+    | TyTuple (t1, t2) ->
+      MySet.union (loop t1) (loop t2)
+  in let freevar_set = loop ty in
+  MySet.to_list freevar_set

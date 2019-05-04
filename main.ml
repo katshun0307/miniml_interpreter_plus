@@ -14,7 +14,7 @@ let rec load_prog_list env tyenv l =
        let ty, new_tyenv = ty_decl tyenv decl in
        let (id, newenv, v) = eval_decl env decl in
        Printf.printf "val %s : " id;
-       print_string (string_of_ty ty);
+       print_string (string_of_ty (ty_of_tysc ty));
        print_string " = ";
        pp_val v;
        print_newline();
@@ -30,10 +30,10 @@ let rec read_eval_print env tyenv =
   flush stdout;
   try
     let decl = Parser.toplevel Lexer.main (Lexing.from_channel stdin) in
-    let ty, new_tyenv = ty_decl tyenv decl in
+    let tysc, new_tyenv = ty_decl tyenv decl in
     let (id, newenv, v) = eval_decl env decl in
     Printf.printf "val %s : " id;
-    print_string (string_of_ty ty);
+    print_string (string_of_ty (ty_of_tysc tysc));
     print_string " = ";
     pp_val v;
     print_newline();
@@ -50,24 +50,15 @@ type eval_result = {
   tyenv: Syntax.ty Environment.t;
 }
 
+(* let test_eval env tyenv prog_str = 
+   let decl = Parser.toplevel Lexer.main (Lexing.from_string prog_str) in
+   let tysc, new_tyenv = ty_decl tyenv decl in
+   let (id, newenv, v) = eval_decl env decl in
+   {tysc = tysc; v = v; env = newenv; tyenv = new_tyenv} *)
 
-let test_eval env tyenv prog_str = 
-  let decl = Parser.toplevel Lexer.main (Lexing.from_string prog_str) in
-  let ty, new_tyenv = ty_decl tyenv decl in
-  let (id, newenv, v) = eval_decl env decl in
-  {ty = ty; v = v; env = newenv; tyenv = new_tyenv}
+let initial_env = Environment.empty
 
-let initial_env = 
-  Environment.extend "i" (IntV 1)
-    (Environment.extend "v" (IntV 5) 
-       (Environment.extend "x" (IntV 10) 
-          (Environment.extend "uso" (BoolV false) Environment.empty)))
-
-let initial_tyenv = 
-  Environment.extend "i" TyInt
-    ( Environment.extend "v" TyInt
-        ( Environment.extend "x" TyInt
-            ( Environment.extend "uso" TyBool Environment.empty)))
+let initial_tyenv = Environment.empty
 
 let srcfile = ref "-"
 

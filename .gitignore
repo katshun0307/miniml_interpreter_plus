@@ -4,4 +4,5 @@ miniml
 _tags
 lexer.ml
 parser.ml
+parser.mli
 .merlin
