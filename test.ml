@@ -1,4 +1,3 @@
-
 open Syntax
 open Eval
 open OUnit
@@ -163,34 +162,6 @@ let polylet_tests = "polylet tests" >::: [
                 {ty = TyFun(TyInt, TyFun(TyVar 1, TyVar 1)); v = None}
                 (test_eval_loop ["let rec f = fun x -> fun y -> if x < 0 then y else f (x + -1) y in f"])
             );
-    (* "7" >:: (fun _ -> assert_equal_content
-                {ty = ; v = }
-                (test_eval_loop [""])
-            );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           );
-       "" >:: (fun _ -> assert_equal_content
-               {ty = ; v = }
-               (test_eval_loop [""])
-           ); *)
   ]
 
 let tests = "all tests" >::: [

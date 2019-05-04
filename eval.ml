@@ -3,9 +3,7 @@ open Core
 
 (* 値の定義 *)
 
-(* exval は式を評価して得られる値．dnval は変数と紐付けられる値．今回
-   の言語ではこの両者は同じになるが，この2つが異なる言語もある．教科書
-   参照． *)
+(* exval は式を評価して得られる値．dnval は変数と紐付けられる値. *)
 type exval =
   | IntV of int
   | BoolV of bool
@@ -149,5 +147,4 @@ let eval_decl env = function
       let dummyenv = ref Environment.empty in 
       let newenv = Environment.extend id (ProcV(para, e, dummyenv)) env in 
       dummyenv := newenv;
-      (id, newenv, ProcV(para, e, dummyenv))
-    )
+      (id, newenv, ProcV(para, e, dummyenv)))

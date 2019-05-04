@@ -50,12 +50,6 @@ type eval_result = {
   tyenv: Syntax.ty Environment.t;
 }
 
-(* let test_eval env tyenv prog_str = 
-   let decl = Parser.toplevel Lexer.main (Lexing.from_string prog_str) in
-   let tysc, new_tyenv = ty_decl tyenv decl in
-   let (id, newenv, v) = eval_decl env decl in
-   {tysc = tysc; v = v; env = newenv; tyenv = new_tyenv} *)
-
 let initial_env = Environment.empty
 
 let initial_tyenv = Environment.empty
