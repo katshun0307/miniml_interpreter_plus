@@ -13,6 +13,7 @@ type exval =
   | ListProcV of id list * exp * dnval Environment.t ref
   | DProcV of id * exp
   | ListV of exval list
+  | TupleV of exval * exval
 and dnval = exval
 
 exception Error of string
@@ -27,6 +28,7 @@ let rec string_of_exval = function
   | ListProcV _ -> "<fun>"
   | DProcV _ -> "<dfun>"
   | ListV val_l -> "[" ^ (String.concat ~sep:";" (List.map val_l ~f:string_of_exval)) ^ "]"
+  | TupleV (v1, v2) -> "(" ^ string_of_exval v1 ^ ", " ^ string_of_exval v2 ^ ")"
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -137,6 +139,7 @@ let rec eval_exp env = function
          | [] -> raise (Error "does not match any case") in
        loop_cases case_list
      | _ -> raise (Error "match expression must be applied to list"))
+  | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
 
 
 let eval_decl env = function

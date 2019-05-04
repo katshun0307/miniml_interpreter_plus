@@ -33,6 +33,7 @@ type exp =
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | ListExp of exp list (* list expression *)
   | MatchExp of exp * (match_case * exp) list (* list match *)
+  | TupleExp of exp * exp (* tuple expression *)
 (* let rec id =
    fun id -> exp in exp *)
 
@@ -49,6 +50,7 @@ type ty =
   | TyVar of tyvar
   | TyFun of ty * ty
   | TyList of ty
+  | TyTuple of ty * ty
 
 let tyvar_string_of_int n =
   (* 26 * block + offset *)
@@ -62,7 +64,6 @@ let tyvar_string_of_int n =
   if block = 0 then "'" ^ alphabet_of_int offset
   else "'" ^ alphabet_of_int offset ^ string_of_int block
 
-(* decaprated *)
 let rec pp_ty = function
   | TyInt -> print_string "int"
   | TyBool -> print_string "bool"
@@ -75,6 +76,13 @@ let rec pp_ty = function
   | TyList t -> 
     pp_ty t;
     print_string " list"
+  | TyTuple (t1, t2) -> 
+    (print_string "(";
+     pp_ty t1;
+     print_string ", ";
+     pp_ty t2;
+     print_string ")")
+
 
 let rec string_of_ty = function
   | TyInt ->  "int"
@@ -85,6 +93,7 @@ let rec string_of_ty = function
      | TyFun (_, _) -> "(" ^ string_of_ty a ^ ") -> " ^ string_of_ty b
      | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
   | TyList t -> (string_of_ty t) ^ " list"
+  | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
 
 (* returns new type variables with fresh_tyvar() *)
 let fresh_tyvar = 

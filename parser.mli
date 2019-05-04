@@ -31,6 +31,7 @@ type token =
   | ELSE
   | DFUN
   | CONS
+  | COMMA
   | AND
 
 (* This exception is raised by the monolithic API functions. *)

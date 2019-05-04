@@ -7,7 +7,7 @@ open Syntax
 %token IF THEN ELSE TRUE FALSE
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN 
-%token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT
+%token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -41,6 +41,7 @@ Expr :
   | e=BinExpr { e } (* binary expressions *) 
   | e=MatchExpr { e } (* match expressions *)
   | e=ListExpr { e } (* list expression *)
+  | e=TupleExpr { e } (* tuple expression *)
 
 (* if expression *)
 IfExpr :
@@ -65,6 +66,10 @@ MatchCaseExpr :
     | SPLIT hd=ID CONS tl=ID RARROW e=Expr nextcase=MatchCaseExpr { (Conscase(hd, tl), e)::nextcase }
     | SPLIT SQLPAREN SQRPAREN RARROW e=Expr { [(Tailcase, e)] }
     | SPLIT SQLPAREN SQRPAREN RARROW e=Expr nextcase=MatchCaseExpr  { (Tailcase, e)::nextcase }
+
+(* tuple expression *)
+TupleExpr : 
+    LPAREN e1=Expr COMMA e2=Expr RPAREN { TupleExp(e1, e2) } 
 
 (* let expression *)
 LETExpr :
