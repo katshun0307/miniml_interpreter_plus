@@ -2,12 +2,19 @@ open Syntax
 open MySet
 
 exception Error of string
+exception MatchNotExhaustive
 
 let err s = raise (Error s)
 
 (* type environment *)
 type tyenv = tysc Environment.t
 type subst = (tyvar * ty) list
+
+(* exhaustive pattern checking *)
+type match_res = 
+  | Match
+  | NoMatch
+  | Undecidable
 
 (* printing *)
 let rec string_of_subst = function 
@@ -113,7 +120,34 @@ let type_list_to_equals l =
     | [] -> raise (Error "entered unexpected case") in
   loop [] l
 
-let rec ty_exp (tyenv: tyenv) = function
+(* check is pattern matching is exhasutive *)
+let rec subst_tail = function
+  | Cons(a, rest) ->  Cons(a, subst_tail rest)
+  | Tail -> Tail
+  | Id _ -> Tail
+
+let check_pattern_exhaustive pattern_list =
+  (* check ideal pattern matches current pattern. (ideal, current) *)
+  let rec matches = function 
+    | Cons(_, rest), Cons(_, rest2) -> matches (rest, rest2)
+    | Tail, Tail | _, Id _ -> Match
+    | Cons(_, _), Tail | Tail, Cons(_, _) -> NoMatch
+    | Id _, Tail | Id _, Cons(_, _) -> Undecidable in
+  let rec sigma ideal_pattern patterns =
+    let match_flags = Core.List.map patterns ~f:(fun p -> matches (ideal_pattern, p)) in
+    if Core.List.exists match_flags ~f:(fun x -> x = Match) 
+    then (* there is a match *)
+      ()
+    else if Core.List.exists match_flags ~f:(fun x -> x = Undecidable)
+    then (* nothing decidable:increment the ideal pattern *)
+      (sigma (subst_tail ideal_pattern) patterns;
+       sigma (Cons("a", ideal_pattern)) patterns)
+    else (* there is no match *)
+      raise MatchNotExhaustive
+  in
+  sigma (Id "_") pattern_list
+
+let rec ty_exp tyenv = function
   | Var x -> 
     (try
        let TyScheme(vars, ty) = Environment.lookup x tyenv in
@@ -229,9 +263,9 @@ let rec ty_exp (tyenv: tyenv) = function
     let e2_ty, e2_subst = ty_exp eval_tyenv2 e2 in
     let main_subst = unify((e1_ty, ty_ret) ::eqls_of_subst e1_subst @ eqls_of_subst e2_subst) in
     (tysc_of_ty (subst_type main_subst (ty_of_tysc e2_ty)), main_subst)
-  | MatchExp (case_exp, case_list) ->
-    let case_tysc, case_subst = ty_exp tyenv case_exp in
-    (match ty_of_tysc case_tysc with
+  (* | MatchExp (case_exp, case_list) ->
+     let case_tysc, case_subst = ty_exp tyenv case_exp in
+     (match ty_of_tysc case_tysc with
      | TyList list_ty -> 
        let return_ty = TyVar (fresh_tyvar ()) in
        let rec loop_cases l (eqls_accum: (ty * ty) list) = 
@@ -243,6 +277,33 @@ let rec ty_exp (tyenv: tyenv) = function
             let e_tysc, e_subst = ty_exp tyenv e in
             loop_cases tl ((ty_of_tysc e_tysc, return_ty):: (eqls_of_subst e_subst)@ eqls_accum)
           | [] -> eqls_accum) in
+       (* unify all eqls *)
+       let main_subst = unify( (e1_ty, ty_x) ::eqls_of_subst e1_subst @ eqls_of_subst e2_subst) in
+       (subst_type main_subst e2_ty, main_subst) *)
+  | MatchExp (case_exp, case_list) -> 
+    let case_tysc, case_subst = ty_exp tyenv case_exp in
+    (* check pattern exhaustive *)
+    check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> p));
+    (match ty_of_tysc case_tysc with
+     | TyList list_ty -> 
+       let return_ty = TyVar (fresh_tyvar ()) in
+       (* loop through match patterns making eqls conditions *)
+       let rec loop_cases l eqls_cases = 
+         (* make type environment for a single match pattern *)
+         let rec make_case_env case (accum_env: (id * tysc) list) = 
+           (match case with
+            | Cons(hd_id, next) -> 
+              make_case_env next (Environment.extend hd_id (tysc_of_ty list_ty) accum_env)  
+            | Id i -> (Environment.extend i (tysc_of_ty (TyList list_ty)) accum_env)
+            | Tail -> tyenv
+           ) (* end of make_case_env *)
+         in
+         (* loop through cases *)
+         (match l with
+          | (matchcase, e):: tl -> 
+            let e_tysc, e_subst = ty_exp (make_case_env matchcase tyenv) e in
+            loop_cases tl ((ty_of_tysc e_tysc, return_ty)::(eqls_of_subst e_subst) @ eqls_cases)
+          | [] -> eqls_cases) in 
        let eqls = loop_cases case_list [] in
        let main_subst =  unify eqls in
        (tysc_of_ty (subst_type main_subst return_ty), main_subst)

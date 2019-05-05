@@ -62,10 +62,18 @@ MatchExpr :
     MATCH ce=Expr WITH cases=MatchCaseExpr { MatchExp(ce, cases) }
 
 MatchCaseExpr : 
-    SPLIT hd=ID CONS tl=ID RARROW e=Expr { [(Conscase(hd, tl), e)] }
+    /* | SPLIT hd=ID CONS tl=ID RARROW e=Expr { [(Conscase(hd, tl), e)] }
     | SPLIT hd=ID CONS tl=ID RARROW e=Expr nextcase=MatchCaseExpr { (Conscase(hd, tl), e)::nextcase }
     | SPLIT SQLPAREN SQRPAREN RARROW e=Expr { [(Tailcase, e)] }
-    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr nextcase=MatchCaseExpr  { (Tailcase, e)::nextcase }
+    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr nextcase=MatchCaseExpr  { (Tailcase, e)::nextcase } */
+    | SPLIT p=MatchPatternExpr RARROW e=Expr nextcase=MatchCaseExpr { (p, e)::nextcase }
+    | SPLIT p=MatchPatternExpr RARROW e=Expr { [(p, e)] }
+
+MatchPatternExpr :
+    | hd=ID CONS rest=MatchPatternExpr { Cons(hd, rest) }
+    | hd=ID CONS tl=ID { Cons(hd, Id tl) }
+    | hd=ID CONS SQLPAREN SQRPAREN { Cons(hd, Tail) }
+    | SQLPAREN SQRPAREN { Tail }
 
 (* tuple expression *)
 TupleExpr : 
