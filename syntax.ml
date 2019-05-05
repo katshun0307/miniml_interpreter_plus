@@ -90,7 +90,6 @@ let rec pp_ty = function
      pp_ty t2;
      print_string ")")
 
-
 let rec string_of_ty = function
   | TyInt ->  "int"
   | TyBool ->  "bool"
@@ -106,6 +105,31 @@ let string_of_tysc = function
   | TyScheme(bl, ty) -> 
     let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map (fun b -> tyvar_string_of_int b) bl) ^ "]" in
     bound_vars ^ string_of_ty ty
+
+let renumber_ty t = 
+  let numref = ref 0 in 
+  let fresh_num () = 
+    let n = !numref in
+    numref := n + 1;
+    n in
+  let renumber_tyvar tv assoc = 
+    let open Core in
+    match List.Assoc.find assoc ~equal:(=) tv with
+    | Some x -> (x, assoc)
+    | None -> let new_tyvar = fresh_num () in
+      (new_tyvar, List.Assoc.add assoc ~equal:(=) tv new_tyvar) in
+  let rec loop ty assoc = 
+    match ty with
+    | TyFun(t1, t2) -> 
+      let t1', assoc1 = loop t1 assoc in
+      let t2', assoc2 = loop t2 (assoc1 @ assoc) in
+      (TyFun(t1', t2'), assoc1 @ assoc2)
+    | TyList t1 -> loop t1 assoc
+    | TyVar tv1 -> 
+      let tv', assoc' =  renumber_tyvar tv1 assoc in
+      (TyVar tv', assoc')
+    | _ as tt -> (tt, assoc) in
+  let (res, _) = loop t [] in res
 
 (* returns new type variables with fresh_tyvar() *)
 let fresh_tyvar = 

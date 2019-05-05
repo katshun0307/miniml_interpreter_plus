@@ -41,26 +41,14 @@ let test_eval_loop prog_lst =
 
 let assert_equal_content = 
   let cmp_content c1 c2 = 
-    let rec ty_eqls t1 t2 ty_assoc = 
-      match t1, t2 with
-      | TyFun (tf11, tf12), TyFun (tf21, tf22) -> 
-        let ty_eql1, ty_assoc1 = ty_eqls tf11 tf12 ty_assoc in
-        let ty_eql2, ty_assoc2 = ty_eqls tf12 tf22 ty_assoc in
-        (ty_eql1 && ty_eql2, ty_assoc1 @ ty_assoc2)
-      | TyList t1, TyList t2 -> ty_eqls t1 t2 ty_assoc
-      | TyVar tv1 , TyVar tv2 -> 
-        (match Core.List.Assoc.find ty_assoc ~equal:(=) tv1 with
-         | Some tv2_expect -> (tv2 = tv2_expect, ty_assoc)
-         | None ->  (true, Core.List.Assoc.add ty_assoc ~equal:(=) tv1 tv2))
-      | TyBool, TyBool -> (true, ty_assoc)
-      | TyInt, TyInt -> (true, ty_assoc)
-      | _ -> (false, ty_assoc) in
     let v_eqls v1o v2o = 
       match v1o, v2o with
       | Some v1, Some v2 -> v1 = v2
       | Some v1, None | None, Some v1 -> true
       | _ -> true in
-    let ty_is_equal, _ = ty_eqls c1.ty c2.ty [] in
+    let renum_t1 = Syntax.renumber_ty c1.ty in
+    let renum_t2 = Syntax.renumber_ty c2.ty in
+    let ty_is_equal = (renum_t1 = renum_t2) in
     ty_is_equal && v_eqls c1.v c2.v in
   let pp_content c = 
     let val_str = 
@@ -169,7 +157,7 @@ let tests = "all tests" >::: [
     recur_tests; 
     list_tests; 
     match_tests;
-    (* polylet_tests; *)
+    polylet_tests;
   ]
 
 let run_test () = 

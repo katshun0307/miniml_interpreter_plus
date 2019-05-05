@@ -14,7 +14,7 @@ let rec load_prog_list env tyenv l =
        let ty, new_tyenv = ty_decl tyenv decl in
        let (id, newenv, v) = eval_decl env decl in
        Printf.printf "val %s : " id;
-       print_string (string_of_ty (ty_of_tysc ty));
+       print_string (string_of_ty (renumber_ty (ty_of_tysc ty)));
        print_string " = ";
        pp_val v;
        print_newline();
@@ -33,7 +33,7 @@ let rec read_eval_print env tyenv =
     let tysc, new_tyenv = ty_decl tyenv decl in
     let (id, newenv, v) = eval_decl env decl in
     Printf.printf "val %s : " id;
-    print_string (string_of_ty (ty_of_tysc tysc));
+    print_string (string_of_ty (renumber_ty (ty_of_tysc tysc)));
     print_string " = ";
     pp_val v;
     print_newline();
