@@ -59,21 +59,27 @@ ListContentExpr :
 
 (* match expression *)
 MatchExpr : 
-    MATCH ce=Expr WITH cases=MatchCaseExpr { MatchExp(ce, cases) }
-
-MatchCaseExpr : 
-    /* | SPLIT hd=ID CONS tl=ID RARROW e=Expr { [(Conscase(hd, tl), e)] }
-    | SPLIT hd=ID CONS tl=ID RARROW e=Expr nextcase=MatchCaseExpr { (Conscase(hd, tl), e)::nextcase }
-    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr { [(Tailcase, e)] }
-    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr nextcase=MatchCaseExpr  { (Tailcase, e)::nextcase } */
-    | SPLIT p=MatchPatternExpr RARROW e=Expr nextcase=MatchCaseExpr { (p, e)::nextcase }
-    | SPLIT p=MatchPatternExpr RARROW e=Expr { [(p, e)] }
-
-MatchPatternExpr :
-    | hd=ID CONS rest=MatchPatternExpr { Cons(hd, rest) }
+    | MATCH ce=Expr WITH cases=ListMatchCaseExpr { MatchExp(ce, cases) }
+    | MATCH ce=Expr WITH cases=TupleMatchCaseExpr { MatchExp(ce, cases) }
+    | MATCH cl1=Expr COMMA cl2=Expr WITH cases=TupleMatchCaseExpr { MatchExp(TupleExp(cl1, cl2), cases) }
+    
+ListMatchPatternExpr :
+    | hd=ID CONS rest=ListMatchPatternExpr { Cons(hd, rest) }
     | hd=ID CONS tl=ID { Cons(hd, Id tl) }
     | hd=ID CONS SQLPAREN SQRPAREN { Cons(hd, Tail) }
     | SQLPAREN SQRPAREN { Tail }
+
+ListMatchCaseExpr : 
+    /* | SPLIT hd=ID CONS tl=ID RARROW e=Expr { [(Conscase(hd, tl), e)] }
+    | SPLIT hd=ID CONS tl=ID RARROW e=Expr nextcase=ListMatchCaseExpr { (Conscase(hd, tl), e)::nextcase }
+    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr { [(Tailcase, e)] }
+    | SPLIT SQLPAREN SQRPAREN RARROW e=Expr nextcase=ListMatchCaseExpr  { (Tailcase, e)::nextcase } */
+    | SPLIT p=ListMatchPatternExpr RARROW e=Expr nextcase=ListMatchCaseExpr { (ListPattern p, e)::nextcase }
+    | SPLIT p=ListMatchPatternExpr RARROW e=Expr { [(ListPattern p, e)] }
+
+TupleMatchCaseExpr :
+    | SPLIT l1=ListMatchPatternExpr COMMA l2=ListMatchPatternExpr RARROW e=Expr nextcase=TupleMatchCaseExpr { (TuplePattern (l1, l2), e)::nextcase }
+    | SPLIT l1=ListMatchPatternExpr COMMA l2=ListMatchPatternExpr RARROW e=Expr { [(TuplePattern (l1, l2), e)] }
 
 (* tuple expression *)
 TupleExpr : 

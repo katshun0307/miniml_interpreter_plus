@@ -119,36 +119,41 @@ let rec eval_exp env = function
     eval_exp newenv exp2
   | ListExp exp_list -> 
     ListV (List.map exp_list ~f:(fun e -> eval_exp env e))
-  | MatchExp(case_exp, case_list) -> 
-    let case_val = eval_exp env case_exp in
-    (match case_val with
+  | MatchExp(guard_exp, pattern_list) -> 
+    let rec make_env list_pattern current_case accum_env =
+      match list_pattern, current_case with
+      | Cons(hd_id, rest_pattern), hd::tl -> 
+        make_env rest_pattern tl (Environment.extend hd_id hd accum_env)
+      | Id id, _ -> Environment.extend id (ListV current_case) accum_env
+      | Tail, [] -> accum_env
+      | _ -> raise MatchFail in
+    let guard_val = eval_exp env guard_exp in
+    (match guard_val with
+     (* guard_val is list *)
      | ListV content_list ->
-       let rec loop_cases cases_list =
-         (* return dnval if pattern match, else raise Error (MatchFail) *)
-         let rec loop_pattern current_case_val return_exp pattern accum_env = 
-          (*
-          * current_case_val : dnval list : current match target
-          * return_exp : expression to evaluate when match succeeds
-          * pattern : current pattern trying to match
-          * accum env : current environment containing pattern variables
-           *)
-           match pattern with
-           | Cons(hd_id, cons_rest) -> 
-             (match current_case_val with
-              | h::t -> loop_pattern t return_exp cons_rest (Environment.extend hd_id h accum_env)
-              | [] -> raise MatchFail)
-           | Id i -> eval_exp (Environment.extend i (ListV current_case_val) accum_env) return_exp
-           | Tail -> if current_case_val = [] then eval_exp accum_env return_exp else raise MatchFail
-         in
-         (* loop through cases *)
-         match cases_list with
-         | (pattern, e):: rest ->
+       let rec loop_pattern current_pattern_list = 
+         match current_pattern_list with
+         | (ListPattern p, e):: rest ->
            (try
-              loop_pattern content_list e pattern env
+              let eval_env = make_env p content_list env in
+              eval_exp eval_env e
             with MatchFail ->
-              loop_cases rest)
+              loop_pattern rest)
+         | (_, _):: _ -> raise (Error "does not match any case") 
          | [] -> raise (Error "does not match any case") in
-       loop_cases case_list 
+       loop_pattern pattern_list 
+     (* guard_val is tuple *)
+     | TupleV (ListV content_list1, ListV content_list2) -> 
+       let rec loop_pattern current_pattern_list  = 
+         match current_pattern_list with
+         | (TuplePattern (p1, p2), e)::rest ->
+           (try
+              let env_p1 = make_env p1 content_list1 env in
+              let env_p2 = make_env p2 content_list2 env_p1 in
+              eval_exp env_p2 e
+            with MatchFail -> loop_pattern rest)
+         | _ -> raise (Error "does not match any case") in
+       loop_pattern pattern_list
      | _ -> raise (Error "match expression must be applied to list"))
   | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
 

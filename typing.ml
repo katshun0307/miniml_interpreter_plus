@@ -282,30 +282,44 @@ let rec ty_exp tyenv = function
        (subst_type main_subst e2_ty, main_subst) *)
   | MatchExp (case_exp, case_list) -> 
     let case_tysc, case_subst = ty_exp tyenv case_exp in
+    let rec extend_list_patten_env p accum_env list_ty =
+      match p with
+      | Cons(hd_id, rest_pattern) ->
+        extend_list_patten_env rest_pattern (Environment.extend hd_id (tysc_of_ty list_ty) accum_env) list_ty
+      | Tail -> accum_env
+      | Id id -> Environment.extend id (tysc_of_ty (TyList list_ty)) accum_env in
     (* check pattern exhaustive *)
-    check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> p));
+    (* check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> p)); *)
     (match ty_of_tysc case_tysc with
      | TyList list_ty -> 
        let return_ty = TyVar (fresh_tyvar ()) in
        (* loop through match patterns making eqls conditions *)
        let rec loop_cases l eqls_cases = 
-         (* make type environment for a single match pattern *)
-         let rec make_case_env case (accum_env: (id * tysc) list) = 
-           (match case with
-            | Cons(hd_id, next) -> 
-              make_case_env next (Environment.extend hd_id (tysc_of_ty list_ty) accum_env)  
-            | Id i -> (Environment.extend i (tysc_of_ty (TyList list_ty)) accum_env)
-            | Tail -> tyenv
-           ) (* end of make_case_env *)
-         in
          (* loop through cases *)
          (match l with
-          | (matchcase, e):: tl -> 
-            let e_tysc, e_subst = ty_exp (make_case_env matchcase tyenv) e in
+          | (ListPattern matchcase, e):: tl -> 
+            let extended_tyenv = extend_list_patten_env matchcase tyenv list_ty in
+            let e_tysc, e_subst = ty_exp extended_tyenv e in
             loop_cases tl ((ty_of_tysc e_tysc, return_ty)::(eqls_of_subst e_subst) @ eqls_cases)
+          | (TuplePattern _, _):: _ -> 
+            raise (Error "unexpected pattern") 
           | [] -> eqls_cases) in 
        let eqls = loop_cases case_list [] in
        let main_subst =  unify eqls in
+       (tysc_of_ty (subst_type main_subst return_ty), main_subst)
+     | TyTuple(TyList list_ty1, TyList list_ty2) -> 
+       let rec return_ty = TyVar (fresh_tyvar ()) in
+       let rec loop_cases l eqls_cases = 
+         (match l with
+          | (TuplePattern (pattern1, pattern2), e):: tl -> 
+            let extended_tyenv = extend_list_patten_env pattern1 (extend_list_patten_env pattern2 tyenv list_ty2) list_ty1 in
+            let e_tysc, e_subst = ty_exp extended_tyenv e in
+            loop_cases tl ((ty_of_tysc e_tysc, return_ty)::(eqls_of_subst e_subst) @ eqls_cases)
+          | (ListPattern _, _):: _ -> 
+            raise (Error "unexpected pattern") 
+          | [] -> eqls_cases) in 
+       let eqls = loop_cases case_list [] in
+       let main_subst = unify eqls in
        (tysc_of_ty (subst_type main_subst return_ty), main_subst)
      | _ -> raise (Error "match expression must be for lists"))
   | ListExp expl -> 

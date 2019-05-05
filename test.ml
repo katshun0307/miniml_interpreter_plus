@@ -115,6 +115,22 @@ let match_tests = "match tests" >::: [
                          {ty = TyInt; v = Some (IntV 60)}
                          (test_eval_loop ["let x = [] in match x with | h::t -> 30 | [] -> 60;;"])
                      );
+    "tuple match tail cons" >:: (fun _ -> assert_equal_content
+                                    {ty = TyInt; v = Some (IntV 1)}
+                                    (test_eval_loop ["let x = [] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> 30 | [], h::t -> h;;"])
+                                );
+    "tuple match cons cons" >:: (fun _ -> assert_equal_content
+                                    {ty = TyInt; v = Some (IntV 4)}
+                                    (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> h | [], h::t -> h;;"])
+                                );
+    "tuple match second" >:: (fun _ -> assert_equal_content
+                                 {ty = TyInt; v = Some (IntV 5)}
+                                 (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::h2::t, a::b -> h2 | [], h::t -> h;;"])
+                             );
+    "tuple match without paren" >:: (fun _ -> assert_equal_content
+                                        {ty = TyInt; v = Some (IntV 5)}
+                                        (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match x, y with | h::h2::t, a::b -> h2 | [], h::t -> h;;"])
+                                    );
     "int match failure" >:: (fun _ -> assert_raises
                                 typing_error
                                 (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::tl -> tl | [] -> 100"])

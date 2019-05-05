@@ -10,10 +10,17 @@ type id = string
 type binOp = Plus | Mult | Lt 
 type logicOp = And | Or
 
-type match_case = 
+type list_pattern = 
   | Tail 
   | Id of id
-  | Cons of id * match_case
+  | Cons of id * list_pattern
+
+type tuple_pattern = 
+  list_pattern * list_pattern
+
+type match_pattern = 
+  | ListPattern of list_pattern 
+  | TuplePattern of tuple_pattern
 
 type exp =
   | Var of id (* Var "x" --> x *)
@@ -33,7 +40,7 @@ type exp =
   | AppExp of exp * exp (* function application expression *)
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | ListExp of exp list (* list expression *)
-  | MatchExp of exp * (match_case * exp) list (* list match *)
+  | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
 (* let rec id =
    fun id -> exp in exp *)
