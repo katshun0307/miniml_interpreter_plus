@@ -61,6 +61,7 @@ let assert_equal_content =
 (* test cases *)
 
 let typing_error = Typing.Error("unify: could not resolve type")
+let match_exhaustive_error = Typing.MatchNotExhaustive
 
 let decl_tests = ("test suites for declaration" >::: [
     "single" >:: (fun _ -> assert_equal_content (test_eval_loop ["3"]) ({ty = TyInt; v = Some (IntV 3)}));
@@ -117,26 +118,42 @@ let match_tests = "match tests" >::: [
                      );
     "tuple match tail cons" >:: (fun _ -> assert_equal_content
                                     {ty = TyInt; v = Some (IntV 1)}
-                                    (test_eval_loop ["let x = [] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> 30 | [], h::t -> h;;"])
+                                    (test_eval_loop ["let x = [] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> 30 | [], h::t -> h | h::t, [] -> 40 | [], [] -> 5;;"])
                                 );
     "tuple match cons cons" >:: (fun _ -> assert_equal_content
                                     {ty = TyInt; v = Some (IntV 4)}
-                                    (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> h | [], h::t -> h;;"])
+                                    (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::t, a::b -> h | h::t, [] -> 500 | [], h::t -> h | [], [] -> 100;;"])
                                 );
     "tuple match second" >:: (fun _ -> assert_equal_content
                                  {ty = TyInt; v = Some (IntV 5)}
-                                 (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::h2::t, a::b -> h2 | [], h::t -> h;;"])
+                                 (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match (x, y) with | h::h2::t, a::b -> h2 | [], h::t -> h | h1, a -> 40;;"])
                              );
     "tuple match without paren" >:: (fun _ -> assert_equal_content
                                         {ty = TyInt; v = Some (IntV 5)}
-                                        (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match x, y with | h::h2::t, a::b -> h2 | [], h::t -> h;;"])
+                                        (test_eval_loop ["let x = [4;5;6] in let y = [1;2;3] in match x, y with | h::h2::t, a::b -> h2 | [], h::t -> h | h1, a -> 500;;"])
                                     );
     "int match failure" >:: (fun _ -> assert_raises
                                 typing_error
                                 (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::tl -> tl | [] -> 100"])
                             );
+    "match not exhaustive1" >:: (fun _ -> assert_raises
+                                    match_exhaustive_error
+                                    (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::tl -> tl"])
+                                );    
+    "match not exhaustive2" >:: (fun _ -> assert_raises
+                                    match_exhaustive_error
+                                    (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::hd2::tl -> tl | [] -> 100"])
+                                );    
+    "tuple match not exhaustive1" >:: (fun _ -> assert_raises
+                                          match_exhaustive_error
+                                          (fun _ -> test_eval_loop ["match [3;4;5;6], [1;2;3] with | hd::tl, ho -> tl"])
+                                      );    
+    "tuple match not exhaustive2" >:: (fun _ -> assert_raises
+                                          match_exhaustive_error
+                                          (fun _ -> test_eval_loop ["match [3;4;5;6], [1;2;3] with | hd::hd2::tl, hh1::hh2::tt2 -> tl | [], []  -> 100"])
+                                      );    
     "int var same failure" >:: (fun _ -> assert_raises
-                                   (Eval.Error("match variable must not be same"))
+                                   (Typing.Error("match variable must not be same"))
                                    (fun _ -> test_eval_loop ["match [3;4;5;6] with | hd::hd -> hd | [] -> 100"])
                                );
   ]

@@ -2,6 +2,7 @@ open Syntax
 open Core
 
 exception MatchFail
+exception SameVarError
 
 (* 値の定義 *)
 
@@ -124,7 +125,8 @@ let rec eval_exp env = function
       match list_pattern, current_case with
       | Cons(hd_id, rest_pattern), hd::tl -> 
         make_env rest_pattern tl (Environment.extend hd_id hd accum_env)
-      | Id id, _ -> Environment.extend id (ListV current_case) accum_env
+      | Id id, _ -> 
+        Environment.extend id (ListV current_case) accum_env
       | Tail, [] -> accum_env
       | _ -> raise MatchFail in
     let guard_val = eval_exp env guard_exp in

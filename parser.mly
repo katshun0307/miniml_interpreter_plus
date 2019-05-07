@@ -67,6 +67,7 @@ ListMatchPatternExpr :
     | hd=ID CONS rest=ListMatchPatternExpr { Cons(hd, rest) }
     | hd=ID CONS tl=ID { Cons(hd, Id tl) }
     | hd=ID CONS SQLPAREN SQRPAREN { Cons(hd, Tail) }
+    | id=ID { Id(id) }
     | SQLPAREN SQRPAREN { Tail }
 
 ListMatchCaseExpr : 

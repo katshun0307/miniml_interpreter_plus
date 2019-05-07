@@ -109,6 +109,12 @@ let rec string_of_ty = function
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
 
+let rec string_of_list_pattern (lp: list_pattern) = 
+  match lp with
+  | Cons(hd, tl) -> hd ^ "::" ^ string_of_list_pattern tl
+  | Id i -> i
+  | Tail -> "[]" 
+
 let string_of_tysc = function
   | TyScheme(bl, ty) -> 
     let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map (fun b -> tyvar_string_of_int b) bl) ^ "]" in
