@@ -10,12 +10,6 @@ let err s = raise (Error s)
 type tyenv = tysc Environment.t
 type subst = (tyvar * ty) list
 
-(* exhaustive pattern checking *)
-type match_res = 
-  | Match
-  | NoMatch
-  | Undecidable
-
 (* printing *)
 let rec string_of_subst = function 
   | (id, ty) :: rest -> "(" ^ string_of_ty (TyVar(id)) ^ ", " ^ string_of_ty ty ^ ")" ^ string_of_subst rest
@@ -120,20 +114,30 @@ let type_list_to_equals l =
     | [] -> raise (Error "entered unexpected case") in
   loop [] l
 
-(* check is pattern matching is exhasutive *)
+(* >>> check if pattern matching is exhasutive >>> *)
+
+(* exhaustive pattern checking *)
+type match_res = 
+  | Match
+  | NoMatch
+  | Undecidable
+
+(* substitute last pattern id with tail 
+   ex) a::b::c --> a::b::[] *)
 let rec subst_tail = function
   | Cons(a, rest) ->  Cons(a, subst_tail rest)
   | Tail -> Tail
   | Id _ -> Tail
 
+(* check if ideal pattern matches current pattern. (ideal, current) *)
 let rec matches = function 
   | Cons(_, rest), Cons(_, rest2) -> matches (rest, rest2)
   | Tail, Tail | _, Id _ -> Match
   | Cons(_, _), Tail | Tail, Cons(_, _) -> NoMatch
   | Id _, Tail | Id _, Cons(_, _) -> Undecidable
 
+(* pattern exhaustivity checking for single list match *)
 let check_pattern_exhaustive pattern_list =
-  (* check ideal pattern matches current pattern. (ideal, current) *)
   let rec sigma ideal_pattern patterns =
     let match_flags = Core.List.map patterns ~f:(fun p -> matches (ideal_pattern, p)) in
     if Core.List.exists match_flags ~f:(fun x -> x = Match) 
@@ -150,6 +154,7 @@ let check_pattern_exhaustive pattern_list =
   in
   sigma (Id "_") pattern_list
 
+(* pattern exhaustivity checking for tuple list match *)
 let check_multi_pattern_exhaustive pattern_tuple_list = 
   let rec sigma ((ideal_pattern1, ideal_pattern2): (list_pattern * list_pattern)) (patterns: (list_pattern * list_pattern) list) =
     let match_flags = Core.List.map patterns ~f:(fun (p1, p2) -> 
@@ -170,6 +175,8 @@ let check_multi_pattern_exhaustive pattern_tuple_list =
        Printf.eprintf "%s" ("(" ^ string_of_list_pattern ideal_pattern1 ^ ", " ^ string_of_list_pattern ideal_pattern2 ^ ")\n");
        raise MatchNotExhaustive) in
   sigma (Id "_", Id "_") pattern_tuple_list
+
+(* <<< check if pattern matching is exhasutive <<< *)
 
 let rec ty_exp tyenv = function
   | Var x -> 
@@ -215,7 +222,6 @@ let rec ty_exp tyenv = function
       | (id, e) :: rest -> 
         let e_tysc, e_subst = ty_exp tyenv e in
         let tysc' = closure (ty_of_tysc e_tysc) tyenv e_subst in
-        (* let new_tyenv = Environment.extend id (TyScheme([], (ty_of_tysc e_tysc))) current_tyenv in *)
         let new_tyenv = Environment.extend id tysc' current_tyenv in
         let new_subst = current_subst @ e_subst in
         extend_envs_from_list new_tyenv new_subst (e_tysc::current_para_types) rest
@@ -300,11 +306,9 @@ let rec ty_exp tyenv = function
       | Id id -> if List.exists ((=) id) ids 
         then raise (Error "match variable must not be same") 
         else Environment.extend id (tysc_of_ty (TyList list_ty)) accum_env in
-    (* check pattern exhaustive *)
-    (* check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> p)); *)
     (match ty_of_tysc case_tysc with
      | TyList list_ty -> 
-       (* check case exhaustive *)
+       (* check pattern exhaustive *)
        check_pattern_exhaustive (Core.List.map case_list ~f:(fun(p, _) -> 
            match p with | ListPattern pp -> pp | _ -> raise (Error "error at pattern exhaustivity check")));
        let return_ty = TyVar (fresh_tyvar ()) in
@@ -372,13 +376,12 @@ let rec ty_decl (tyenv: tyenv) = function
     let e_ty, _ = ty_decl tyenv (Exp e) in
     let new_tyenv = Environment.extend id (closure (ty_of_tysc e_ty) tyenv []) tyenv in
     (e_ty, new_tyenv)
-  (* | RecDecl (id, para, e) -> 
-     let ty_x = TyVar(fresh_tyvar()) in (* type of return value: f x *)
-     let ty_para = TyVar(fresh_tyvar()) in (* type of parameter: x *)
-     let eval_tyenv = Environment.extend id (TyFun(ty_para, ty_x)) (Environment.extend para ty_para tyenv) in
-     let ty_main, e_subst = ty_exp eval_tyenv e in
-     let main_subst = unify( (ty_x, ty_main) :: eqls_of_subst e_subst) in
-     let ty_para2 = subst_type main_subst ty_para in
-     let main_ty = TyFun(ty_para2, ty_main) in
-     (main_ty, Environment.extend id main_ty tyenv) *)
-  | _ -> err "not implemented"
+  | RecDecl (id, para, e) -> 
+    let ty_x = TyVar(fresh_tyvar()) in (* type of return value: f x *)
+    let ty_para = TyVar(fresh_tyvar()) in (* type of parameter: x *)
+    let eval_tyenv = Environment.extend id (tysc_of_ty (TyFun(ty_para, ty_x))) (Environment.extend para (tysc_of_ty ty_para) tyenv) in
+    let tysc_main, e_subst = ty_exp eval_tyenv e in
+    let main_subst = unify( (ty_x, ty_of_tysc tysc_main) :: eqls_of_subst e_subst) in
+    let ty_para2 = subst_type main_subst ty_para in
+    let main_ty = TyFun(ty_para2, ty_of_tysc tysc_main) in
+    (tysc_of_ty main_ty, Environment.extend id (tysc_of_ty main_ty) tyenv)
