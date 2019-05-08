@@ -89,9 +89,9 @@ let rec unify eqs: (tyvar * ty) list  =
   loop eqs []
 
 let ty_prim op (ty1:ty) (ty2:ty) = match op with
-  | Plus -> (TyInt, (ty1, TyInt) :: (ty2, TyInt) :: [])
-  | Mult -> (TyInt, (ty1, TyInt) :: (ty2, TyInt) :: [])
+  | Plus | Minus | Mult | Div | Modulo -> (TyInt, (ty1, TyInt) :: (ty2, TyInt) :: [])
   | Lt  -> (TyBool, (ty1, TyInt) :: (ty2, TyInt) :: [])
+  | Eq -> (TyBool, (ty1, ty2) :: [])
 
 let ty_logic op (ty1:ty) (ty2:ty) = 
   match op with

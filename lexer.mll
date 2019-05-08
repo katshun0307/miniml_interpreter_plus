@@ -30,7 +30,10 @@ rule main = parse
 | ")" { Parser.RPAREN }
 | ";;" { Parser.SEMISEMI }
 | "+" { Parser.PLUS }
+| "-" { Parser.MINUS }
 | "*" { Parser.MULT }
+| "/" { Parser.DIVIDE }
+| "%" { Parser.MODULO }
 | "<" { Parser.LT }
 | "&&" { Parser.AND }
 | "||" { Parser.OR }

@@ -63,6 +63,54 @@ let assert_equal_content =
 let typing_error = Typing.Error("unify: could not resolve type")
 let match_exhaustive_error = Typing.MatchNotExhaustive
 
+let binop_tests = "binary operation tests" >::: [
+    "simple +" >:: (fun _ -> assert_equal_content 
+                       {ty = TyInt; v = Some (IntV 5)}
+                       (test_eval_loop ["3 + 2"])
+                   );
+    "simple -" >:: (fun _ -> assert_equal_content 
+                       {ty = TyInt; v = Some (IntV 1)}
+                       (test_eval_loop ["3 - 2"])
+                   );
+    "simple *" >:: (fun _ -> assert_equal_content 
+                       {ty = TyInt; v = Some (IntV 6)}
+                       (test_eval_loop ["3 * 2"])
+                   );
+    "simple /" >:: (fun _ -> assert_equal_content 
+                       {ty = TyInt; v = Some (IntV 2)}
+                       (test_eval_loop ["5 / 2"])
+                   );
+    "simple mod" >:: (fun _ -> assert_equal_content 
+                         {ty = TyInt; v = Some (IntV 1)}
+                         (test_eval_loop ["3 % 2"])
+                     );
+    "priority test1" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 13)}
+                             (test_eval_loop ["3 + 2 * 5"])
+                         );
+    "priority test2" >:: (fun _ -> assert_equal_content 
+                             {ty = TyBool; v = Some (BoolV true)}
+                             (test_eval_loop ["3 - 2 * 5 < 2 + 3 - 3 * 5 / 2"])
+                         );
+    "priority test3" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 4)}
+                             (test_eval_loop ["3 + 3 * 3 % 2"])
+                         );
+    "priority test4" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 0)}
+                             (test_eval_loop ["3 + 3 * 2 / 5 % 3 - 4;;"])
+                         );
+    "priority test5" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 0)}
+                             (test_eval_loop ["3 % 4 * 7 % 2 / 4;;"])
+                         );
+    "priority test6" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 0)}
+                             (test_eval_loop ["3 / 4 * 3 % 2 / 5 % 3 * 3;;"])
+                         );
+
+  ]
+
 let decl_tests = ("test suites for declaration" >::: [
     "single" >:: (fun _ -> assert_equal_content (test_eval_loop ["3"]) ({ty = TyInt; v = Some (IntV 3)}));
   ])
@@ -186,6 +234,7 @@ let polylet_tests = "polylet tests" >::: [
   ]
 
 let tests = "all tests" >::: [
+    binop_tests;
     decl_tests; 
     recur_tests; 
     list_tests; 

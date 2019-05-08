@@ -33,13 +33,31 @@ let rec string_of_exval = function
 
 let pp_val v = print_string (string_of_exval v)
 
+let rec check_equals = function
+  | IntV i1, IntV i2 -> i1 = i2
+  | BoolV i1, BoolV i2 -> i1 = i2
+  | ListV l1, ListV l2 -> 
+    (try 
+       List.fold2_exn l1 l2 ~init:true ~f:(fun x y z -> x && check_equals (y, z))
+     with _ -> false)
+  | TupleV (u1, u2), TupleV (v1, v2) -> 
+    check_equals (u1, v1) && check_equals (u2, v2)
+  | _ -> err ("Both arguments must be value: =")
+
 let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
-    Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
+  | Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
   | Plus, _, _ -> err ("Both arguments must be integer: +")
+  | Minus, IntV i1, IntV i2 -> IntV (i1 - i2)
+  | Minus, _, _ -> err ("Both arguments must be integer: -")
   | Mult, IntV i1, IntV i2 -> IntV (i1 * i2)
   | Mult, _, _ -> err ("Both arguments must be integer: *")
+  | Div, IntV i1, IntV i2 -> IntV (i1 / i2)
+  | Div, _, _ -> err ("Both arguments must be integer: /")
   | Lt, IntV i1, IntV i2 -> BoolV (i1 < i2)
   | Lt, _, _ -> err ("Both arguments must be integer: <")
+  | Modulo, IntV i1, IntV i2 -> IntV (i1 % i2)
+  | Modulo, _, _ -> err ("Both arguments must be integer: %")
+  | Eq, _, _ -> BoolV (check_equals (arg1, arg2))
 
 let rec find l n = 
   match l with 
@@ -67,10 +85,16 @@ let rec eval_exp env = function
     ( match op with 
       | And -> let arg1 = eval_exp env e1 in 
         if arg1 = BoolV(false) then BoolV(false) else 
-          let arg2 = eval_exp env e2 in if (arg2 = BoolV(true)) || (arg2 = BoolV(false)) then arg2 else err("non boolean values supplied: &&")
+          let arg2 = eval_exp env e2 in 
+          if (arg2 = BoolV(true)) || (arg2 = BoolV(false)) 
+          then arg2 
+          else err("non boolean values supplied: &&")
       | Or -> let arg1 = eval_exp env e1 in
         if arg1 = BoolV(true) then BoolV(true) else
-          let arg2 = eval_exp env e2 in if (arg2 = BoolV(true)) || (arg2 = BoolV(false)) then arg2 else err("non boolean values supplied: ||"))
+          let arg2 = eval_exp env e2 in 
+          if (arg2 = BoolV(true)) || (arg2 = BoolV(false)) 
+          then arg2 
+          else err("non boolean values supplied: ||"))
   | IfExp (exp1, exp2, exp3) ->
     let test = eval_exp env exp1 in
     (match test with

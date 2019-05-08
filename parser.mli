@@ -16,6 +16,8 @@ type token =
   | PLUS
   | OR
   | MULT
+  | MODULO
+  | MINUS
   | MATCH
   | LT
   | LPAREN
@@ -29,6 +31,7 @@ type token =
   | FALSE
   | EQ
   | ELSE
+  | DIVIDE
   | DFUN
   | CONS
   | COMMA

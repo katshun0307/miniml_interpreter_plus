@@ -7,8 +7,8 @@ let err s = raise (Error s)
 (* ML interpreter / type reconstruction *)
 type id = string
 
-type binOp = Plus | Mult | Lt 
-type logicOp = And | Or
+type binOp = Plus | Minus | Mult | Div | Lt | Modulo | Eq
+type logicOp = And | Or 
 
 type list_pattern = 
   | Tail 
@@ -26,6 +26,7 @@ type exp =
   | Var of id (* Var "x" --> x *)
   | ILit of int (* ILit 3 --> 3 *)
   | BLit of bool (* BLit true --> true *)
+  | ListExp of exp list (* list expression *)
   | BinOp of binOp * exp * exp
   | LogicOp of logicOp * exp * exp
   (* BinOp(Plus, ILit 4, Var "x") --> 4 + x *)
@@ -39,11 +40,8 @@ type exp =
   | DFunExp of id * exp (* dynamic function expression *)
   | AppExp of exp * exp (* function application expression *)
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
-  | ListExp of exp list (* list expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
-(* let rec id =
-   fun id -> exp in exp *)
 
 type program =
     Exp of exp
