@@ -28,8 +28,10 @@ let rec subst_type s ty =
     | TyFun(a, b) -> TyFun(resolve_subst subst_pair a, resolve_subst subst_pair b)
     | TyInt -> TyInt
     | TyBool -> TyBool
+    | TyString -> TyString
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
+    | TyUser id -> TyUser id
   in match s with 
   | top :: rest -> 
     subst_type rest (resolve_subst top ty)
@@ -73,15 +75,10 @@ let rec unify eqs: (tyvar * ty) list  =
        if x = y then loop rest current_subst else
          (match x, y with
           | TyFun(a, b), TyFun(c, d) -> loop ((a, c) :: (b, d) :: rest) current_subst
-          | TyVar(id), b -> 
+          | TyVar(id), b | b, TyVar(id) -> 
             if not (MySet.member id (freevar_ty b)) then
               let mid = unify(subst_eqs (id, b) rest) in
               (id, b):: mid
-            else err "unify: could not resolve type"
-          | b, TyVar(id) -> 
-            if not (MySet.member id (freevar_ty b)) then
-              let mid = unify(subst_eqs (id, b) rest) in
-              (id, b) :: mid
             else err "unify: could not resolve type"
           | _ -> err "unify: could not resolve type"
          )
@@ -102,9 +99,11 @@ let get_type = function
   | TyVar _ -> "tyvar"
   | TyBool -> "tybool"
   | TyInt -> "tyint"
+  | TyString -> "tystring"
   | TyFun _ -> "tyfun"   
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
+  | TyUser _ -> "tyuser"
 
 (* (ex) ['a; int; int 'b] -> [('a, int); (int; int); (int, 'b)] *)
 let type_list_to_equals l = 
@@ -187,6 +186,7 @@ let rec ty_exp tyenv = function
      with Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit _ -> (tysc_of_ty(TyInt), [])
   | BLit _ -> (tysc_of_ty(TyBool), [])
+  | SLit _ -> (tysc_of_ty(TyString), [])
   | BinOp (op, exp1, exp2) -> 
     let tyarg1, tysubst1 = ty_exp tyenv exp1 in
     let tyarg2, tysubst2 = ty_exp tyenv exp2 in
@@ -273,12 +273,16 @@ let rec ty_exp tyenv = function
     let subst_main = unify([ty_of_tysc ty_exp1, TyFun(ty_of_tysc ty_exp2, ty_ret)] @ eqls_of_subst tysubst1 @ eqls_of_subst tysubst2) in
     let ty_3 = subst_type subst_main ty_ret in
     (tysc_of_ty ty_3, subst_main)
-  | LetRecExp(id, para, e1, e2) -> 
+  | LetRecExp(id, (para_id, para_hint), e1, e2) -> 
     let ty_ret = TyVar(fresh_tyvar()) in (* type of return value: f x *)
-    let ty_para = TyVar(fresh_tyvar()) in (* type of parameter: x *)
+    (* let ty_para = match para_hint with *)
+    (* | Some t -> t *)
+    (* | None -> TyVar(fresh_tyvar()) in  *)
+    (* type of parameter: x *)
+    let ty_para = TyVar(fresh_tyvar()) in
     (* first formula *)
     (* >>> make env *)
-    let eval_tyenv1 = Environment.extend id (tysc_of_ty (TyFun(ty_para, ty_ret))) (Environment.extend para (tysc_of_ty ty_para) tyenv) in
+    let eval_tyenv1 = Environment.extend id (tysc_of_ty (TyFun(ty_para, ty_ret))) (Environment.extend para_id (tysc_of_ty ty_para) tyenv) in
     let (TyScheme(e1_bounds, e1_ty)), e1_subst = ty_exp eval_tyenv1 e1 in
     let first_subst = unify((ty_ret, e1_ty) :: eqls_of_subst e1_subst) in
     let ty_para_eval = subst_type first_subst ty_para in
@@ -370,10 +374,13 @@ let rec ty_exp tyenv = function
 
 let rec ty_decl (tyenv: tyenv) = function
   | Exp e -> 
-    let (type_, _) = ty_exp tyenv e in
-    (type_, tyenv)
-  | Decl(id, e) -> 
-    let e_ty, _ = ty_decl tyenv (Exp e) in
+    let (tysc, _) = ty_exp tyenv e in
+    (tysc, tyenv)
+  | Decl((id, type_hint), e) -> 
+    let tyenv' = match type_hint with
+      | Some t -> Environment.extend id (tysc_of_ty t) tyenv
+      | None -> tyenv in
+    let e_ty, _ = ty_decl tyenv' (Exp e) in
     let new_tyenv = Environment.extend id (closure (ty_of_tysc e_ty) tyenv []) tyenv in
     (e_ty, new_tyenv)
   | RecDecl (id, para, e) -> 

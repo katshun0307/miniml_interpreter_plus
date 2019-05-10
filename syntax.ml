@@ -6,6 +6,9 @@ let err s = raise (Error s)
 
 (* ML interpreter / type reconstruction *)
 type id = string
+type tyid = string
+
+type raw_str = string
 
 type binOp = Plus | Minus | Mult | Div | Lt | Modulo | Eq
 type logicOp = And | Or 
@@ -22,10 +25,23 @@ type match_pattern =
   | ListPattern of list_pattern 
   | TuplePattern of tuple_pattern
 
-type exp =
+type tyvar = int
+
+type ty = 
+  | TyInt 
+  | TyBool
+  | TyString
+  | TyVar of tyvar
+  | TyFun of ty * ty
+  | TyList of ty
+  | TyTuple of ty * ty
+  | TyUser of id
+and hinted_id = id * ty option
+and exp =
   | Var of id (* Var "x" --> x *)
   | ILit of int (* ILit 3 --> 3 *)
   | BLit of bool (* BLit true --> true *)
+  | SLit of raw_str
   | ListExp of exp list (* list expression *)
   | BinOp of binOp * exp * exp
   | LogicOp of logicOp * exp * exp
@@ -39,24 +55,13 @@ type exp =
   | FunExp of id list * exp (* static function expression *)
   | DFunExp of id * exp (* dynamic function expression *)
   | AppExp of exp * exp (* function application expression *)
-  | LetRecExp of id * id * exp * exp (* recursive function expression *)
+  | LetRecExp of id * hinted_id * exp * exp (* recursive function expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
-
-type program =
+and program =
     Exp of exp
-  | Decl of id * exp
+  | Decl of hinted_id * exp
   | RecDecl of id * id * exp
-
-type tyvar = int
-
-type ty = 
-  | TyInt 
-  | TyBool
-  | TyVar of tyvar
-  | TyFun of ty * ty
-  | TyList of ty
-  | TyTuple of ty * ty
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty
@@ -80,7 +85,9 @@ let tyvar_string_of_int n =
 let rec pp_ty = function
   | TyInt -> print_string "int"
   | TyBool -> print_string "bool"
+  | TyString -> print_string "string"
   | TyVar id -> print_string (tyvar_string_of_int id)
+  | TyUser i -> print_string i
   | TyFun(a, b)-> 
     print_string "(";
     (pp_ty a;
@@ -99,7 +106,9 @@ let rec pp_ty = function
 let rec string_of_ty = function
   | TyInt ->  "int"
   | TyBool ->  "bool"
+  | TyString -> "string"
   | TyVar id ->  tyvar_string_of_int id
+  | TyUser i -> i
   | TyFun(a, b) -> 
     (match a with
      | TyFun (_, _) -> "(" ^ string_of_ty a ^ ") -> " ^ string_of_ty b
@@ -117,6 +126,43 @@ let string_of_tysc = function
   | TyScheme(bl, ty) -> 
     let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map (fun b -> tyvar_string_of_int b) bl) ^ "]" in
     bound_vars ^ string_of_ty ty
+
+let string_of_binop = function
+  | Plus -> "+"
+  | Minus -> "-"
+  | Mult -> "*"
+  | Div -> "/"
+  | Lt -> "<"
+  | Modulo -> "%"
+  | Eq -> "="
+
+let string_of_logicop = function
+  | And -> "&&"
+  | Or -> "||"
+
+let rec string_of_exp e = 
+  let open Core in
+  match e with
+  | Var x -> "<" ^ x ^ ">"
+  | ILit i -> string_of_int i
+  | BLit b -> string_of_bool b
+  | SLit s -> s
+  | ListExp _ -> "<list>"
+  | BinOp(b, e1, e2) -> 
+    sprintf "%s %s %s" (string_of_exp e1) (string_of_binop b) (string_of_exp e2)
+  | LogicOp(l, e1, e2) -> 
+    sprintf "%s %s %s" (string_of_exp e1) (string_of_logicop l) (string_of_exp e2)
+  | IfExp(e1, e2, e3) -> 
+    sprintf "if %s then %s else %s" (string_of_exp e1) (string_of_exp e2) (string_of_exp e3)
+  | MultiLetExp(l, e) -> 
+    let decls = String.concat ~sep:"; " (List.map l ~f:(fun (id, e) -> id ^ "=" ^ string_of_exp e)) in
+    sprintf "MultiLetExp([%s], %s)" decls (string_of_exp e)
+  | _ -> "<hoge>"
+
+let string_of_program = function
+  | Decl _ -> "decl"
+  | Exp e -> string_of_exp e
+  | RecDecl _ -> "recdecl" 
 
 let renumber_ty t = 
   let numref = ref 0 in 
@@ -165,7 +211,7 @@ let freevar_tysc (TyScheme(b, ty)) =
   let bounds = MySet.from_list b in
   let rec loop ty = 
     match ty with
-    | TyInt | TyBool -> MySet.empty
+    | TyInt | TyBool | TyString | TyUser _ -> MySet.empty
     | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
     | TyList t1 -> loop t1
     | TyVar v -> 

@@ -3,8 +3,12 @@
 
 type token = 
   | WITH
+  | UNDERBAR
+  | TYID of (Syntax.tyid)
   | TRUE
   | THEN
+  | STRV of (Syntax.raw_str)
+  | STRING
   | SQRPAREN
   | SQLPAREN
   | SPLIT
@@ -21,9 +25,11 @@ type token =
   | MATCH
   | LT
   | LPAREN
+  | LIST
   | LETAND
   | LET
   | INTV of (int)
+  | INT
   | IN
   | IF
   | ID of (Syntax.id)
@@ -35,6 +41,8 @@ type token =
   | DFUN
   | CONS
   | COMMA
+  | COLON
+  | BOOL
   | AND
 
 (* This exception is raised by the monolithic API functions. *)

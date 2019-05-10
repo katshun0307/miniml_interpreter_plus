@@ -8,9 +8,12 @@ open Syntax
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN 
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
+%token INT BOOL STRING LIST COLON UNDERBAR
 
 %token <int> INTV
 %token <Syntax.id> ID
+%token <Syntax.tyid> TYID
+%token <Syntax.raw_str> STRV
 
 %start toplevel
 %type <Syntax.program> toplevel
@@ -18,10 +21,26 @@ open Syntax
 
 toplevel :
   | e=Expr SEMISEMI { Exp e }
-  | LET x=ID EQ e=Expr SEMISEMI { Decl(x, e) }
-  | LET f=ID b=LETFUNExpr { Decl(f, b) } (* declaration *)
+  | LET x=HintedId EQ e=Expr SEMISEMI { Decl(x, e) }
+  | LET f=HintedId b=LETFUNExpr { Decl(f, b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
+
+TypeExpr :
+  | INT { TyInt }
+  | BOOL { TyBool }
+  | STRING { TyString }
+  | i=ID { TyUser i }
+  | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
+  | lty=TypeExpr LIST { TyList lty }
+  | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
+  | LPAREN e=TypeExpr RPAREN { e }
+  | UNDERBAR { TyVar(fresh_tyvar ()) }
+
+HintedId : 
+  | i=ID { (i, None) }
+  | i=ID COLON t=TypeExpr { (i, Some t) }
+  /* | LPAREN i=ID COLON t=TypeExpr RPAREN { (i, Some t) } */
 
 (* let function declarations *)
 LETFUNExpr :
@@ -52,7 +71,6 @@ ListExpr :
 
 ListContentExpr : 
   | SQRPAREN { [] }
-  | e=Expr SEMI SQRPAREN { [e] }
   | e=Expr SQRPAREN { [e] }
   | e=Expr SEMI next=ListContentExpr { e::next }
 
@@ -86,8 +104,8 @@ LETExpr :
   | LET e1=MULTILETExpr IN e2=Expr { MultiLetExp(e1, e2) } (* simple value declarations *)
 
 LETRECExpr : 
-  | LET REC f=ID EQ FUN para=ID RARROW e1=Expr IN e2=Expr { LetRecExp(f, para, e1, e2) }
-  | LET REC f=ID para=ID EQ e1=Expr IN e2=Expr { LetRecExp(f, para, e1 ,e2) }
+  | LET REC f=ID EQ FUN para=ID RARROW e1=Expr IN e2=Expr { LetRecExp(f, (para, None), e1, e2) }
+  | LET REC f=ID para=ID EQ e1=Expr IN e2=Expr { LetRecExp(f, (para, None), e1 ,e2) }
 
 (* multiple declarations for let expression *)
 MULTILETExpr : 
@@ -156,7 +174,7 @@ DFunBottomultExpr : (* ....xn-1 xn -> expr *)
   | x=ID b=DFunBottomultExpr { DFunExp (x, b) }
 
 BinExpr : (* binary expression *)
-  |  LPAREN EQ RPAREN   { FunExp(["a" ; "b"], BinOp   (Eq,    Var "a", Var "b")) }
+  |  LPAREN EQ RPAREN   { FunExp(["a" ; "b"], BinOp     (Eq,      Var "a", Var "b")) }
   |  LPAREN PLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Plus,    Var "a", Var "b")) }
   |  LPAREN MINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (Minus,   Var "a", Var "b")) }
   |  LPAREN MULT RPAREN   { FunExp(["a" ; "b"], BinOp   (Mult,    Var "a", Var "b")) }
@@ -168,7 +186,8 @@ BinExpr : (* binary expression *)
 
 (* most basic expressions *)
 AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
-  | i=INTV { ILit i } 
+  | i=INTV { ILit i }
+  | s=STRV { SLit s }
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
