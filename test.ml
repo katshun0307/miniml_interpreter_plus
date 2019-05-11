@@ -36,8 +36,8 @@ let rec eval_loop env tyenv prog_lst =
     eval_loop res.env res.tyenv tl
   | [] -> raise UnexpectedMatch
 
-let test_eval_loop prog_lst =
-  eval_loop initial_env initial_tyenv prog_lst 
+let test_eval_loop =
+  eval_loop initial_env initial_tyenv  
 
 let assert_equal_content = 
   let cmp_content c1 c2 = 

@@ -11,7 +11,7 @@ let rec load_prog_list env tyenv l =
   | phrase :: rest -> 
     (try
        let decl = Parser.toplevel Lexer.main (Lexing.from_string (phrase ^ ";;")) in
-       let ty, new_tyenv = ty_decl tyenv decl in
+       let ty, new_tyenv = ty_decl tyenv decl  in
        let (id, newenv, v) = eval_decl env decl in
        Printf.printf "val %s : " id;
        print_string (string_of_ty (renumber_ty (ty_of_tysc ty)));
@@ -51,8 +51,8 @@ type eval_result = {
 }
 
 let initial_env = Environment.empty
-
 let initial_tyenv = Environment.empty
+let initial_tytyenv = Environment.empty
 
 let srcfile = ref "-"
 

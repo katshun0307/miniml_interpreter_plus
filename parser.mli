@@ -3,6 +3,8 @@
 
 type token = 
   | WITH
+  | TYPE
+  | TYID of (Syntax.tyid)
   | TRUE
   | THEN
   | SQRPAREN

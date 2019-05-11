@@ -8,7 +8,10 @@ let err s = raise (Error s)
 
 (* type environment *)
 type tyenv = tysc Environment.t
+type tytyenv = ty Environment.t
 type subst = (tyvar * ty) list
+
+let tytyenv = ref (Environment.empty: tytyenv)
 
 (* printing *)
 let rec string_of_subst = function 
@@ -30,6 +33,8 @@ let rec subst_type s ty =
     | TyBool -> TyBool
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
+    | TyUser t -> TyUser t
+    | TyDummy -> TyDummy
   in match s with 
   | top :: rest -> 
     subst_type rest (resolve_subst top ty)
@@ -105,6 +110,8 @@ let get_type = function
   | TyFun _ -> "tyfun"   
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
+  | TyUser ty_name -> ty_name
+  | TyDummy -> "dummy"
 
 (* (ex) ['a; int; int 'b] -> [('a, int); (int; int); (int, 'b)] *)
 let type_list_to_equals l = 
@@ -366,6 +373,11 @@ let rec ty_exp tyenv = function
     let main_subst = unify (eqls_of_subst ty_subst1 @ eqls_of_subst ty_subst2) in
     let main_ty = TyTuple(subst_type main_subst (ty_of_tysc tysc1),subst_type main_subst (ty_of_tysc tysc2)) in
     (tysc_of_ty main_ty, [])
+  | UserExp tyid -> 
+    (try 
+       let t = Environment.lookup tyid (!tytyenv) in
+       (tysc_of_ty t, [])
+     with _ -> err (Core.sprintf "tyval %s not found in tytyenv" tyid))
   | _ -> err "ty_exp: not implemented"
 
 let rec ty_decl (tyenv: tyenv) = function
@@ -373,7 +385,7 @@ let rec ty_decl (tyenv: tyenv) = function
     let (type_, _) = ty_exp tyenv e in
     (type_, tyenv)
   | Decl(id, e) -> 
-    let e_ty, _ = ty_decl tyenv (Exp e) in
+    let e_ty, _ = ty_decl tyenv (Exp e)  in
     let new_tyenv = Environment.extend id (closure (ty_of_tysc e_ty) tyenv []) tyenv in
     (e_ty, new_tyenv)
   | RecDecl (id, para, e) -> 
@@ -385,3 +397,11 @@ let rec ty_decl (tyenv: tyenv) = function
     let ty_para2 = subst_type main_subst ty_para in
     let main_ty = TyFun(ty_para2, ty_of_tysc tysc_main) in
     (tysc_of_ty main_ty, Environment.extend id (tysc_of_ty main_ty) tyenv)
+  | TypeDecl(type_name, tyid_list) ->
+    print_string (List.hd tyid_list);
+    let rec append_tytyenv l accum = 
+      match l with
+      | h::t -> Environment.extend h (TyUser type_name) accum
+      | [] -> accum in
+    tytyenv := append_tytyenv tyid_list (!tytyenv);
+    (tysc_of_ty TyDummy, tyenv)

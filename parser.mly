@@ -8,9 +8,11 @@ open Syntax
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN 
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
+%token TYPE
 
 %token <int> INTV
 %token <Syntax.id> ID
+%token <Syntax.tyid> TYID
 
 %start toplevel
 %type <Syntax.program> toplevel
@@ -22,6 +24,7 @@ toplevel :
   | LET f=ID b=LETFUNExpr { Decl(f, b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
+  | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
 
 (* let function declarations *)
 LETFUNExpr :
@@ -30,6 +33,11 @@ LETFUNExpr :
 LETFUNPARAExpr :
   | x=ID l=LETFUNPARAExpr { x :: l }
   | x=ID EQ { x :: [] }
+
+(* type declarations *)
+TYDECLSExpr : 
+  | tv=TYID  { [tv] }
+  | tv=TYID SPLIT rest=TYDECLSExpr { tv:: rest }
 
 Expr :
   | e=IfExpr { e } (* if expression *)
@@ -173,4 +181,5 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | TRUE   { BLit true }
   | FALSE  { BLit false }
   | i=ID   { Var i }
+  | i=TYID { UserExp i }
   | LPAREN e=Expr RPAREN { e }

@@ -15,6 +15,7 @@ type exval =
   | DProcV of id * exp
   | ListV of exval list
   | TupleV of exval * exval
+  | UserV of tyid
 and dnval = exval
 
 exception Error of string
@@ -30,6 +31,7 @@ let rec string_of_exval = function
   | DProcV _ -> "<dfun>"
   | ListV val_l -> "[" ^ (String.concat ~sep:";" (List.map val_l ~f:string_of_exval)) ^ "]"
   | TupleV (v1, v2) -> "(" ^ string_of_exval v1 ^ ", " ^ string_of_exval v2 ^ ")"
+  | UserV tyid -> tyid
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -182,6 +184,7 @@ let rec eval_exp env = function
        loop_pattern pattern_list
      | _ -> raise (Error "match expression must be applied to list"))
   | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
+  | UserExp tyid -> UserV tyid
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
@@ -191,3 +194,4 @@ let eval_decl env = function
       let newenv = Environment.extend id (ProcV(para, e, dummyenv)) env in 
       dummyenv := newenv;
       (id, newenv, ProcV(para, e, dummyenv)))
+  | TypeDecl(ty_name, l) -> (ty_name, env, ListV (List.map l ~f:(fun x -> UserV x)))

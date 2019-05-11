@@ -14,6 +14,7 @@ let reservedWords = [
   ("and", Parser.LETAND);
   ("match", Parser.MATCH);
   ("with", Parser.WITH);
+  ("type", Parser.TYPE)
 ] 
 }
 
@@ -51,6 +52,10 @@ rule main = parse
         List.assoc id reservedWords
       with
       _ -> Parser.ID id
+     }
+| ['A'-'Z'] ['a'-'z' '0'-'9' '_' '\'']*
+    { let tyid = Lexing.lexeme lexbuf in
+      Parser.TYID tyid
      }
 | eof { exit 0 }
 

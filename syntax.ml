@@ -6,6 +6,7 @@ let err s = raise (Error s)
 
 (* ML interpreter / type reconstruction *)
 type id = string
+type tyid = string
 
 type binOp = Plus | Minus | Mult | Div | Lt | Modulo | Eq
 type logicOp = And | Or 
@@ -21,6 +22,18 @@ type tuple_pattern =
 type match_pattern = 
   | ListPattern of list_pattern 
   | TuplePattern of tuple_pattern
+
+type tyvar = int
+
+type ty = 
+  | TyInt 
+  | TyBool
+  | TyVar of tyvar
+  | TyFun of ty * ty
+  | TyList of ty
+  | TyTuple of ty * ty
+  | TyUser of id (* user defined type *)
+  | TyDummy (* return type of type declaration *)
 
 type exp =
   | Var of id (* Var "x" --> x *)
@@ -42,21 +55,13 @@ type exp =
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
+  | UserExp of tyid (* instance of user-defined type *)
 
 type program =
     Exp of exp
   | Decl of id * exp
   | RecDecl of id * id * exp
-
-type tyvar = int
-
-type ty = 
-  | TyInt 
-  | TyBool
-  | TyVar of tyvar
-  | TyFun of ty * ty
-  | TyList of ty
-  | TyTuple of ty * ty
+  | TypeDecl of id * (tyid list)
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty
@@ -95,6 +100,8 @@ let rec pp_ty = function
      print_string ", ";
      pp_ty t2;
      print_string ")")
+  | TyUser id -> print_string id
+  | TyDummy -> print_string "@@@"
 
 let rec string_of_ty = function
   | TyInt ->  "int"
@@ -106,6 +113,8 @@ let rec string_of_ty = function
      | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
+  | TyUser id -> id
+  | TyDummy -> "@@@"
 
 let rec string_of_list_pattern (lp: list_pattern) = 
   match lp with
@@ -165,7 +174,7 @@ let freevar_tysc (TyScheme(b, ty)) =
   let bounds = MySet.from_list b in
   let rec loop ty = 
     match ty with
-    | TyInt | TyBool -> MySet.empty
+    | TyInt | TyBool | TyUser _ | TyDummy -> MySet.empty
     | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
     | TyList t1 -> loop t1
     | TyVar v -> 
