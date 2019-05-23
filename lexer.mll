@@ -14,7 +14,11 @@ let reservedWords = [
   ("and", Parser.LETAND);
   ("match", Parser.MATCH);
   ("with", Parser.WITH);
-  ("type", Parser.TYPE)
+  ("int", Parser.INT);
+  ("bool", Parser.BOOL);
+  ("list", Parser.LIST);
+  ("type", Parser.TYPE);
+  ("of", Parser.OF);
 ] 
 }
 
@@ -46,6 +50,7 @@ rule main = parse
 | "|" { Parser.SPLIT }
 | "::" { Parser.CONS }
 | "," { Parser.COMMA }
+| "_" { Parser.UNDERBAR }
 | ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
     { let id = Lexing.lexeme lexbuf in
       try 
@@ -53,7 +58,7 @@ rule main = parse
       with
       _ -> Parser.ID id
      }
-| ['A'-'Z'] ['a'-'z' '0'-'9' '_' '\'']*
+| ['A'-'Z'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '\'']*
     { let tyid = Lexing.lexeme lexbuf in
       Parser.TYID tyid
      }

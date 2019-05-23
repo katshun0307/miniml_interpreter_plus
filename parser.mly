@@ -8,7 +8,8 @@ open Syntax
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN 
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
-%token TYPE
+%token INT BOOL LIST COLON UNDERBAR
+%token TYPE OF
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -26,6 +27,15 @@ toplevel :
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
   | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
 
+TypeExpr :
+  | INT { TyInt }
+  | BOOL { TyBool }
+  | i=ID { TyUser i }
+  | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
+  | lty=TypeExpr LIST { TyList lty }
+  | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
+  | LPAREN e=TypeExpr RPAREN { e }
+
 (* let function declarations *)
 LETFUNExpr :
   | para=LETFUNPARAExpr e=Expr SEMISEMI { FunExp(para, e) }
@@ -36,8 +46,10 @@ LETFUNPARAExpr :
 
 (* type declarations *)
 TYDECLSExpr : 
-  | tv=TYID  { [tv] }
-  | tv=TYID SPLIT rest=TYDECLSExpr { tv:: rest }
+  | variant=TYID  { [(variant, TyDummy)] }
+  | variant=TYID OF t=TypeExpr { [(variant, t)] }
+  | variant=TYID SPLIT rest=TYDECLSExpr { (variant, TyDummy) :: rest }
+  | variant=TYID OF t=TypeExpr SPLIT rest=TYDECLSExpr { (variant, t)::rest }
 
 Expr :
   | e=IfExpr { e } (* if expression *)
@@ -66,27 +78,30 @@ ListContentExpr :
 
 (* match expression *)
 MatchExpr : 
-  | MATCH ce=Expr WITH cases=ListMatchCaseExpr { MatchExp(ce, cases) }
-  | MATCH ce=Expr WITH cases=TupleMatchCaseExpr { MatchExp(ce, cases) }
-  | MATCH cl1=Expr COMMA cl2=Expr WITH cases=TupleMatchCaseExpr { MatchExp(TupleExp(cl1, cl2), cases) }
-    
-ListMatchPatternExpr :
-  | hd=ID CONS rest=ListMatchPatternExpr { Cons(hd, rest) }
-  | hd=ID CONS tl=ID { Cons(hd, Id tl) }
-  | hd=ID CONS SQLPAREN SQRPAREN { Cons(hd, Tail) }
-  | id=ID { Id(id) }
-  | SQLPAREN SQRPAREN { Tail }
+  | MATCH ce=Expr WITH cases=MultMatchCasesExpr { MatchExp(ce, cases) }
+  | MATCH ce=Expr WITH fp=MatchCaseExpr1 RARROW e=Expr restcase=MultMatchCasesExpr { MatchExp(ce, (fp, e)::restcase) }
 
-ListMatchCaseExpr : 
-  | SPLIT p=ListMatchPatternExpr RARROW e=Expr nextcase=ListMatchCaseExpr { (ListPattern p, e)::nextcase }
-  | SPLIT p=ListMatchPatternExpr RARROW e=Expr { [(ListPattern p, e)] }
+MultMatchCasesExpr : 
+  | SPLIT p=MatchCaseExpr1 RARROW e=Expr nextcase=MultMatchCasesExpr { (p, e)::nextcase }
+  | SPLIT p=MatchCaseExpr1 RARROW e=Expr { [(p, e)] }
 
-TupleMatchCaseExpr :
-    | SPLIT l1=ListMatchPatternExpr COMMA l2=ListMatchPatternExpr RARROW e=Expr nextcase=TupleMatchCaseExpr { (TuplePattern (l1, l2), e)::nextcase }
-    | SPLIT l1=ListMatchPatternExpr COMMA l2=ListMatchPatternExpr RARROW e=Expr { [(TuplePattern (l1, l2), e)] }
+MatchCaseExpr1 : (* a single pattern *)
+  | t1=MatchCaseExpr1 COMMA t2=MatchCaseExpr1 { TuplePattern (t1, t2) } 
+  | LPAREN t1=MatchCaseExpr1 COMMA t2=MatchCaseExpr1 RPAREN { TuplePattern (t1, t2) }
+  | t=MatchCaseExpr2 { t } 
+
+MatchCaseExpr2 :
+  | h=MatchCaseExpr3 CONS t=MatchCaseExpr2 { ConsListPattern (h, t) }
+  | var=TYID vv=MatchCaseExpr1 { VariantPattern (var, vv) }
+  | e=MatchCaseExpr3 { e }
+
+MatchCaseExpr3 :
+  | SQLPAREN SQRPAREN { TailListPattern }
+  | id=ID { IdPattern id }
 
 (* tuple expression *)
 TupleExpr : 
+  | e1=Expr COMMA e2=Expr { TupleExp(e1, e2) } 
   | LPAREN e1=Expr COMMA e2=Expr RPAREN { TupleExp(e1, e2) } 
 
 (* let expression *)
@@ -164,15 +179,15 @@ DFunBottomultExpr : (* ....xn-1 xn -> expr *)
   | x=ID b=DFunBottomultExpr { DFunExp (x, b) }
 
 BinExpr : (* binary expression *)
-  |  LPAREN EQ RPAREN   { FunExp(["a" ; "b"], BinOp   (Eq,    Var "a", Var "b")) }
-  |  LPAREN PLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Plus,    Var "a", Var "b")) }
-  |  LPAREN MINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (Minus,   Var "a", Var "b")) }
-  |  LPAREN MULT RPAREN   { FunExp(["a" ; "b"], BinOp   (Mult,    Var "a", Var "b")) }
-  |  LPAREN DIVIDE RPAREN { FunExp(["a" ; "b"], BinOp   (Div,     Var "a", Var "b")) }
-  |  LPAREN MODULO RPAREN { FunExp(["a" ; "b"], BinOp   (Modulo,  Var "a", Var "b")) }
-  |  LPAREN LT RPAREN     { FunExp(["a" ; "b"], BinOp   (Lt,      Var "a", Var "b")) }
-  |  LPAREN AND RPAREN    { FunExp(["a" ; "b"], LogicOp (And,     Var "a", Var "b")) }
-  |  LPAREN OR RPAREN     { FunExp(["a" ; "b"], LogicOp (Or,      Var "a", Var "b")) }
+  |  LPAREN EQ RPAREN     { FunExp(["a" ; "b"], BinOp   (Eq,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN PLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Plus,    Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (Minus,   Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MULT RPAREN   { FunExp(["a" ; "b"], BinOp   (Mult,    Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN DIVIDE RPAREN { FunExp(["a" ; "b"], BinOp   (Div,     Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MODULO RPAREN { FunExp(["a" ; "b"], BinOp   (Modulo,  Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN LT RPAREN     { FunExp(["a" ; "b"], BinOp   (Lt,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN AND RPAREN    { FunExp(["a" ; "b"], LogicOp (And,     Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN OR RPAREN     { FunExp(["a" ; "b"], LogicOp (Or,      Var (ID "a"), Var (ID "b"))) }
 
 (* most basic expressions *)
 AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
@@ -180,6 +195,6 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
-  | i=ID   { Var i }
-  | i=TYID { UserExp i }
+  | i=ID   { Var (ID i) }
+  | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }

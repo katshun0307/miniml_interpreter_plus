@@ -16,6 +16,8 @@ type exval =
   | ListV of exval list
   | TupleV of exval * exval
   | UserV of tyid
+  | ArityUserV of tyid
+  | ArityAppUserV of tyid * exval
 and dnval = exval
 
 exception Error of string
@@ -32,6 +34,8 @@ let rec string_of_exval = function
   | ListV val_l -> "[" ^ (String.concat ~sep:";" (List.map val_l ~f:string_of_exval)) ^ "]"
   | TupleV (v1, v2) -> "(" ^ string_of_exval v1 ^ ", " ^ string_of_exval v2 ^ ")"
   | UserV tyid -> tyid
+  | ArityUserV tyid -> tyid
+  | ArityAppUserV (tyid, v) -> tyid ^ " of " ^ (string_of_exval v)
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -74,9 +78,11 @@ let multiple_decls_sanity lst =
   in loop lst []
 
 let rec eval_exp env = function
-    Var x -> 
+    Var (ID x)  -> 
     (try Environment.lookup x env with 
        Environment.Not_bound -> err ("Variable not bound: " ^ x))
+  | Var (VARIANT x) -> (try Environment.lookup x env with 
+        Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit i -> IntV i
   | BLit b -> BoolV b
   | BinOp (op, exp1, exp2) -> 
@@ -137,6 +143,8 @@ let rec eval_exp env = function
           | [] -> err("too many arguments"))
        | DProcV(id, body) -> let newenv = Environment.extend id arg env in
          eval_exp newenv body
+       | ArityUserV(tyid) ->
+         ArityAppUserV (tyid, arg) 
        | e -> err ("Non function value is applied")))
   | DFunExp (id, exp) -> DProcV(id, exp)
   | LetRecExp (id, para, exp1, exp2) ->
@@ -147,44 +155,72 @@ let rec eval_exp env = function
   | ListExp exp_list -> 
     ListV (List.map exp_list ~f:(fun e -> eval_exp env e))
   | MatchExp(guard_exp, pattern_list) -> 
-    let rec make_env list_pattern current_case accum_env =
-      match list_pattern, current_case with
-      | Cons(hd_id, rest_pattern), hd::tl -> 
+    (* let rec make_env list_pattern current_case accum_env =
+       match list_pattern, current_case with
+       | Cons(hd_id, rest_pattern), hd::tl -> 
         make_env rest_pattern tl (Environment.extend hd_id hd accum_env)
-      | Id id, _ -> 
+       | Id id, _ -> 
         Environment.extend id (ListV current_case) accum_env
-      | Tail, [] -> accum_env
-      | _ -> raise MatchFail in
+       | Tail, [] -> accum_env
+       | _ -> raise MatchFail in *)
     let guard_val = eval_exp env guard_exp in
-    (match guard_val with
+    let rec make_pattern_env pt (ex:dnval) (accum_env: dnval Environment.t) =
+      (* recursive function to make env with pattern vars in env *)
+      match pt, ex with
+      | ConsListPattern (p1, p2), ListV (hdval:: tlval) -> 
+        let p1_env = make_pattern_env p1 hdval accum_env in
+        make_pattern_env p2 (ListV tlval) p1_env
+      | TailListPattern, ListV [] -> accum_env 
+      | TuplePattern (p1, p2), TupleV(val1, val2) ->
+        let p1_env = make_pattern_env p1 val1 accum_env in
+        make_pattern_env p2 val2 p1_env 
+      | VariantPattern (pt_tyid, ipt), ArityAppUserV (v_tyid, varval) -> 
+        if pt_tyid = v_tyid then 
+          make_pattern_env ipt varval accum_env
+        else raise MatchFail
+      | IdPattern id, _ -> 
+        if id = "_" then accum_env
+        else Environment.extend id ex accum_env
+      | _, _ -> raise MatchFail
+    in
+    let rec loop_pattern pl = 
+      match pl with
+      | (pt, e)::rest -> 
+        (try
+           let eval_env = make_pattern_env pt guard_val env in
+           eval_exp eval_env e
+         with MatchFail ->
+           loop_pattern rest)
+      | [] -> err "match failed" in
+    loop_pattern pattern_list
+  (* (match guard_val with
      (* guard_val is list *)
      | ListV content_list ->
-       let rec loop_pattern current_pattern_list = 
-         match current_pattern_list with
-         | (ListPattern p, e):: rest ->
-           (try
-              let eval_env = make_env p content_list env in
-              eval_exp eval_env e
-            with MatchFail ->
-              loop_pattern rest)
-         | (_, _):: _ -> raise (Error "does not match any case") 
-         | [] -> raise (Error "does not match any case") in
-       loop_pattern pattern_list 
+     let rec loop_pattern current_pattern_list = 
+       match current_pattern_list with
+       | (ListPattern p, e):: rest ->
+         (try
+            let eval_env = make_env p content_list env in
+            eval_exp eval_env e
+          with MatchFail ->
+            loop_pattern rest)
+       | (_, _):: _ -> raise (Error "does not match any case") 
+       | [] -> raise (Error "does not match any case") in
+     loop_pattern pattern_list 
      (* guard_val is tuple *)
      | TupleV (ListV content_list1, ListV content_list2) -> 
-       let rec loop_pattern current_pattern_list  = 
-         match current_pattern_list with
-         | (TuplePattern (p1, p2), e)::rest ->
-           (try
-              let env_p1 = make_env p1 content_list1 env in
-              let env_p2 = make_env p2 content_list2 env_p1 in
-              eval_exp env_p2 e
-            with MatchFail -> loop_pattern rest)
-         | _ -> raise (Error "does not match any case") in
-       loop_pattern pattern_list
-     | _ -> raise (Error "match expression must be applied to list"))
+     let rec loop_pattern current_pattern_list  = 
+       match current_pattern_list with
+       | (TuplePattern (p1, p2), e)::rest ->
+         (try
+            let env_p1 = make_env p1 content_list1 env in
+            let env_p2 = make_env p2 content_list2 env_p1 in
+            eval_exp env_p2 e
+          with MatchFail -> loop_pattern rest)
+       | _ -> raise (Error "does not match any case") in
+     loop_pattern pattern_list
+     | _ -> raise (Error "match expression must be applied to list")) *)
   | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
-  | UserExp tyid -> UserV tyid
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
@@ -194,4 +230,16 @@ let eval_decl env = function
       let newenv = Environment.extend id (ProcV(para, e, dummyenv)) env in 
       dummyenv := newenv;
       (id, newenv, ProcV(para, e, dummyenv)))
-  | TypeDecl(ty_name, l) -> (ty_name, env, ListV (List.map l ~f:(fun x -> UserV x)))
+  | TypeDecl(ty_name, variant_list) -> 
+    let rec extend_env l accum_env = 
+      match l with
+      | (h, TyDummy)::t -> 
+        let accum_env' = Environment.extend h (UserV h) accum_env in
+        extend_env t accum_env'
+      | (h, _)::t -> 
+        let accum_env' = Environment.extend h (ArityUserV h) accum_env in
+        extend_env t accum_env'
+      | [] -> accum_env in
+    let env' = extend_env variant_list env in
+    (ty_name, env', ListV (List.map variant_list ~f:(fun (x, _) -> UserV x)))
+

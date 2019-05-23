@@ -3,6 +3,7 @@
 
 type token = 
   | WITH
+  | UNDERBAR
   | TYPE
   | TYID of (Syntax.tyid)
   | TRUE
@@ -17,15 +18,18 @@ type token =
   | RARROW
   | PLUS
   | OR
+  | OF
   | MULT
   | MODULO
   | MINUS
   | MATCH
   | LT
   | LPAREN
+  | LIST
   | LETAND
   | LET
   | INTV of (int)
+  | INT
   | IN
   | IF
   | ID of (Syntax.id)
@@ -37,6 +41,8 @@ type token =
   | DFUN
   | CONS
   | COMMA
+  | COLON
+  | BOOL
   | AND
 
 (* This exception is raised by the monolithic API functions. *)

@@ -8,6 +8,10 @@ let err s = raise (Error s)
 type id = string
 type tyid = string
 
+type vars = 
+  | ID of string
+  | VARIANT of string
+
 type binOp = Plus | Minus | Mult | Div | Lt | Modulo | Eq
 type logicOp = And | Or 
 
@@ -15,13 +19,6 @@ type list_pattern =
   | Tail 
   | Id of id
   | Cons of id * list_pattern
-
-type tuple_pattern = 
-  list_pattern * list_pattern
-
-type match_pattern = 
-  | ListPattern of list_pattern 
-  | TuplePattern of tuple_pattern
 
 type tyvar = int
 
@@ -32,11 +29,19 @@ type ty =
   | TyFun of ty * ty
   | TyList of ty
   | TyTuple of ty * ty
-  | TyUser of id (* user defined type *)
+  | TyUser of id
+  | TyArityUser of id * ty (* user defined type *)
   | TyDummy (* return type of type declaration *)
 
+type match_pattern = 
+  | ConsListPattern of match_pattern * match_pattern
+  | TailListPattern
+  | TuplePattern of match_pattern * match_pattern
+  | VariantPattern of tyid * match_pattern
+  | IdPattern of id
+
 type exp =
-  | Var of id (* Var "x" --> x *)
+  | Var of vars (* Var "x" --> x *)
   | ILit of int (* ILit 3 --> 3 *)
   | BLit of bool (* BLit true --> true *)
   | ListExp of exp list (* list expression *)
@@ -55,13 +60,12 @@ type exp =
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
-  | UserExp of tyid (* instance of user-defined type *)
 
 type program =
     Exp of exp
   | Decl of id * exp
   | RecDecl of id * id * exp
-  | TypeDecl of id * (tyid list)
+  | TypeDecl of id * ((tyid * ty) list)
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty
@@ -101,6 +105,9 @@ let rec pp_ty = function
      pp_ty t2;
      print_string ")")
   | TyUser id -> print_string id
+  | TyArityUser (id, t) -> 
+    (print_string (id ^ " of ");
+     pp_ty t)
   | TyDummy -> print_string "@@@"
 
 let rec string_of_ty = function
@@ -113,8 +120,21 @@ let rec string_of_ty = function
      | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
-  | TyUser id -> id
+  | TyUser id -> "@" ^ id
+  | TyArityUser(id, t) -> id ^ " of " ^ string_of_ty t 
   | TyDummy -> "@@@"
+
+let rec string_of_pattern p = 
+  let open Core in
+  match p with
+  | ConsListPattern (p1, p2) -> 
+    sprintf "%s :: %s" (string_of_pattern p1) (string_of_pattern p2)
+  | TailListPattern -> "[]"
+  | TuplePattern (p1, p2) -> 
+    sprintf "(%s, %s)" (string_of_pattern p1) (string_of_pattern p2)
+  | VariantPattern (tyid, pin) -> 
+    sprintf "%s(%s)" tyid (string_of_pattern pin)
+  | IdPattern i -> i
 
 let rec string_of_list_pattern (lp: list_pattern) = 
   match lp with
@@ -183,5 +203,7 @@ let freevar_tysc (TyScheme(b, ty)) =
       else MySet.singleton v
     | TyTuple (t1, t2) ->
       MySet.union (loop t1) (loop t2)
+    | TyArityUser (id, t) -> 
+      loop t
   in let freevar_set = loop ty in
   MySet.to_list freevar_set

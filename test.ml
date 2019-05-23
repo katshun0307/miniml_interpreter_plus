@@ -233,6 +233,25 @@ let polylet_tests = "polylet tests" >::: [
             );
   ]
 
+let user_type_tests = "user type tests" >::: [
+    "basic single" >:: (fun _ -> assert_equal_content
+                           {ty = TyUser "food"; v = None}
+                           (test_eval_loop ["type food = Yogurt"; "Yogurt"])
+                       );
+    "basic multiple" >:: (fun _ -> assert_equal_content
+                             {ty = TyUser "food"; v = None}
+                             (test_eval_loop ["type food = Yogurt | Hotdog"; "Hotdog"])
+                         );
+    "basic single ty" >:: (fun _ -> assert_equal_content
+                              {ty = TyUser "food"; v = Some (ArityAppUserV("Yogurt", (IntV 5)))}
+                              (test_eval_loop ["type food = Yogurt of int"; "Yogurt 5"])
+                          );
+    "basic multiple ty" >:: (fun _ -> assert_equal_content
+                                {ty = TyUser "food"; v = Some (ArityAppUserV("Hotdog", (IntV 3)))}
+                                (test_eval_loop ["type food = Yogurt of int | Hotdog of int"; "Hotdog 3"])
+                            );
+  ]
+
 let tests = "all tests" >::: [
     binop_tests;
     decl_tests; 
@@ -240,6 +259,7 @@ let tests = "all tests" >::: [
     list_tests; 
     match_tests;
     polylet_tests;
+    user_type_tests;
   ]
 
 let run_test () = 
