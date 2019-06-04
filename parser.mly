@@ -79,11 +79,12 @@ ListContentExpr :
 (* match expression *)
 MatchExpr : 
   | MATCH ce=Expr WITH cases=MultMatchCasesExpr { MatchExp(ce, cases) }
-  | MATCH ce=Expr WITH fp=MatchCaseExpr1 RARROW e=Expr restcase=MultMatchCasesExpr { MatchExp(ce, (fp, e)::restcase) }
+  | MATCH ce=Expr WITH SPLIT cases=MultMatchCasesExpr { MatchExp(ce, cases) }
+  /* | MATCH ce=Expr WITH fp=MatchCaseExpr1 RARROW e=Expr restcase=MultMatchCasesExpr { MatchExp(ce, (fp, e)::restcase) } */
 
 MultMatchCasesExpr : 
-  | SPLIT p=MatchCaseExpr1 RARROW e=Expr nextcase=MultMatchCasesExpr { (p, e)::nextcase }
-  | SPLIT p=MatchCaseExpr1 RARROW e=Expr { [(p, e)] }
+  | p=MatchCaseExpr1 RARROW e=Expr SPLIT nextcase=MultMatchCasesExpr { (p, e)::nextcase }
+  | p=MatchCaseExpr1 RARROW e=Expr { [(p, e)] }
 
 MatchCaseExpr1 : (* a single pattern *)
   | t1=MatchCaseExpr1 COMMA t2=MatchCaseExpr1 { TuplePattern (t1, t2) } 
@@ -98,6 +99,8 @@ MatchCaseExpr2 :
 MatchCaseExpr3 :
   | SQLPAREN SQRPAREN { TailListPattern }
   | id=ID { IdPattern id }
+  | tid=TYID { SingleVariantPattern tid }
+  | UNDERBAR { UnderbarPattern }
 
 (* tuple expression *)
 TupleExpr : 
@@ -160,6 +163,7 @@ MultExpr : (* multiplication *)
 AppExpr : (* function application *)
   | e1=AppExpr e2=AExpr { AppExp(e1, e2) }
   | e1=BinExpr e2=AExpr { AppExp(e1, e2) }
+  | vari=TYID e2=Expr { AppExp(Var (VARIANT vari), e2) }
   | e=AExpr { e }
 
 (* static function expression *)

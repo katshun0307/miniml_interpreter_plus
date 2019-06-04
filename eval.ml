@@ -174,6 +174,8 @@ let rec eval_exp env = function
       | TuplePattern (p1, p2), TupleV(val1, val2) ->
         let p1_env = make_pattern_env p1 val1 accum_env in
         make_pattern_env p2 val2 p1_env 
+      | SingleVariantPattern pt_tyid, UserV v_tyid -> 
+        if pt_tyid = v_tyid then accum_env else raise MatchFail
       | VariantPattern (pt_tyid, ipt), ArityAppUserV (v_tyid, varval) -> 
         if pt_tyid = v_tyid then 
           make_pattern_env ipt varval accum_env
@@ -181,6 +183,7 @@ let rec eval_exp env = function
       | IdPattern id, _ -> 
         if id = "_" then accum_env
         else Environment.extend id ex accum_env
+      | UnderbarPattern, _ -> accum_env
       | _, _ -> raise MatchFail
     in
     let rec loop_pattern pl = 

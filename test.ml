@@ -206,6 +206,29 @@ let match_tests = "match tests" >::: [
                                );
   ]
 
+let advanced_match_tests = "advanced match" >::: [
+    "user no arity match" >:: (fun _ -> assert_equal_content
+                                  {ty = TyInt; v = Some (IntV 3)}
+                                  (test_eval_loop ["type food = Yogurt | Hotdog"; "match Hotdog with | Hotdog -> 3 | Yogurt -> 5"])
+                              );
+    "tuple match not exhaustive2" >:: (fun _ -> assert_raises
+                                          match_exhaustive_error
+                                          (fun _ -> test_eval_loop ["type food = Yogurt | Hotdog"; "match Hotdog with | Hotdog -> 3"])
+                                      );
+    "user arity match" >:: (fun _ -> assert_equal_content
+                               {ty = TyInt; v = Some (IntV 3)}
+                               (test_eval_loop ["type food = Yogurt of int | Hotdog of int"; "match Hotdog 3 with | Hotdog a -> a | Yogurt b -> b"])
+                           );
+    "user arity match 2" >:: (fun _ -> assert_equal_content
+                                 {ty = TyInt; v = Some (IntV 3)}
+                                 (test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with | Hotdog b -> 3 | Yogurt b -> b"])
+                             );
+    "user arity match not exhaustive2" >:: (fun _ -> assert_raises
+                                               match_exhaustive_error
+                                               (fun _ -> test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with Hotdog b -> 3"])
+                                           );
+  ]
+
 let polylet_tests = "polylet tests" >::: [
     "1" >:: (fun _ -> assert_raises
                 typing_error
@@ -260,6 +283,7 @@ let tests = "all tests" >::: [
     match_tests;
     polylet_tests;
     user_type_tests;
+    advanced_match_tests;
   ]
 
 let run_test () = 

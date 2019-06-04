@@ -30,15 +30,16 @@ type ty =
   | TyList of ty
   | TyTuple of ty * ty
   | TyUser of id
-  | TyArityUser of id * ty (* user defined type *)
   | TyDummy (* return type of type declaration *)
 
 type match_pattern = 
   | ConsListPattern of match_pattern * match_pattern
   | TailListPattern
   | TuplePattern of match_pattern * match_pattern
+  | SingleVariantPattern of tyid 
   | VariantPattern of tyid * match_pattern
   | IdPattern of id
+  | UnderbarPattern
 
 type exp =
   | Var of vars (* Var "x" --> x *)
@@ -104,10 +105,8 @@ let rec pp_ty = function
      print_string ", ";
      pp_ty t2;
      print_string ")")
-  | TyUser id -> print_string id
-  | TyArityUser (id, t) -> 
-    (print_string (id ^ " of ");
-     pp_ty t)
+  | TyUser id -> 
+    print_string id
   | TyDummy -> print_string "@@@"
 
 let rec string_of_ty = function
@@ -120,8 +119,8 @@ let rec string_of_ty = function
      | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
-  | TyUser id -> "@" ^ id
-  | TyArityUser(id, t) -> id ^ " of " ^ string_of_ty t 
+  | TyUser id ->
+    "@" ^ id
   | TyDummy -> "@@@"
 
 let rec string_of_pattern p = 
@@ -132,9 +131,11 @@ let rec string_of_pattern p =
   | TailListPattern -> "[]"
   | TuplePattern (p1, p2) -> 
     sprintf "(%s, %s)" (string_of_pattern p1) (string_of_pattern p2)
+  | SingleVariantPattern tyid -> "Variant(" ^ tyid ^ ")"
   | VariantPattern (tyid, pin) -> 
     sprintf "%s(%s)" tyid (string_of_pattern pin)
   | IdPattern i -> i
+  | UnderbarPattern -> "__"
 
 let rec string_of_list_pattern (lp: list_pattern) = 
   match lp with
@@ -203,7 +204,5 @@ let freevar_tysc (TyScheme(b, ty)) =
       else MySet.singleton v
     | TyTuple (t1, t2) ->
       MySet.union (loop t1) (loop t2)
-    | TyArityUser (id, t) -> 
-      loop t
   in let freevar_set = loop ty in
   MySet.to_list freevar_set

@@ -7,6 +7,10 @@ let singleton x = [x]
 let from_list x = x
 let to_list x = x
 
+let rec exists x = function
+  | h::t -> if x = h then true else exists x t
+  | [] -> false
+
 let rec insert x = function
     [] -> [x]
   | y::rest -> if x = y then y :: rest else y :: insert x rest

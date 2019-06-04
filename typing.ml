@@ -34,8 +34,7 @@ let rec subst_type s ty =
     | TyBool -> TyBool
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
-    | TyUser t -> TyUser t
-    | TyArityUser (id, t) -> TyArityUser(id, resolve_subst subst_pair t)
+    | TyUser id -> TyUser id
     | TyDummy -> TyDummy
   in match s with 
   | top :: rest -> 
@@ -113,7 +112,6 @@ let get_type = function
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
   | TyUser ty_name -> ty_name
-  | TyArityUser _ -> "tyarity"
   | TyDummy -> "dummy"
 
 (* (ex) ['a; int; int 'b] -> [('a, int); (int; int); (int, 'b)] *)
@@ -140,7 +138,6 @@ let string_of_match_res = function
 
 (* check if ideal pattern matches current pattern. (ideal, current) *)
 let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) = 
-  (* Core.printf "checking ideal: %s\n current: %s\n" (string_of_pattern ideal_p) (string_of_pattern pp); *)
   match (ideal_p, pp) with
   | ConsListPattern(iph, ipt), ConsListPattern(ph, pt) -> 
     (match (matches tyenv (iph, ph)), (matches tyenv (ipt, pt)) with
@@ -155,20 +152,49 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
      | _, Undecidable (_ as l) -> Undecidable (List.map (fun a -> TuplePattern(ip1, a)) l)
      | NoMatch, _ | _, NoMatch -> NoMatch
      | Match, Match -> Match )
+  | SingleVariantPattern ityid, SingleVariantPattern tyid -> 
+    if tyid = ityid then Match else NoMatch
   | VariantPattern(ityid, ip), VariantPattern(tyid, p) -> 
     if tyid = ityid then matches tyenv (ip, p) else NoMatch
   | _, IdPattern _ -> Match
   | IdPattern _, ConsListPattern _ | IdPattern _, TailListPattern ->
     Undecidable [ConsListPattern(IdPattern "_", TailListPattern); TailListPattern]
+  | IdPattern _, SingleVariantPattern tyid -> 
+    let tysc_of_variant = Environment.lookup tyid tyenv in
+    (match ty_of_tysc tysc_of_variant with
+     (* | TyUser (tt, _) | TyFun(_, TyUser (tt, _)) ->  *)
+     | TyUser tt -> 
+       let variant_list = Environment.lookup tt (!variant_env) in
+       Undecidable (List.map (fun (tyid, _) -> SingleVariantPattern tyid) variant_list)
+     | _ -> err ("cannot find type of single variant : " ^ tyid))
   | IdPattern _, VariantPattern(tyid, _) -> 
     let tysc_of_variant = Environment.lookup tyid tyenv in
     (match ty_of_tysc tysc_of_variant with
-     | TyUser tt | TyFun(_, TyUser tt) -> 
+     (* | TyUser tt | TyFun(_, TyUser tt) ->  *)
+       TyFun(_, TyUser tt) -> 
        let variant_list = Environment.lookup tt (!variant_env) in
        Undecidable (List.map (fun (tyid, _) -> VariantPattern (tyid, IdPattern "_")) variant_list)
      | _ -> err ("cannot find type of variant : " ^ tyid))
   | IdPattern _, TuplePattern _ -> Undecidable [TuplePattern(IdPattern "_", IdPattern "_")]
+  | _, UnderbarPattern -> Match
   | _ -> NoMatch
+
+let pattern_same_var_check pattern_list = 
+  let rec loop p accum = 
+    let open Core in
+    match p with
+    | ConsListPattern (p1, p2) | TuplePattern(p1, p2) -> 
+      let _, p1_accum = loop p1 accum in
+      loop p2 p1_accum
+    | TailListPattern | SingleVariantPattern _ -> true, accum
+    | VariantPattern (_, p1) -> loop p1 accum
+    | IdPattern i -> 
+      not (MySet.exists i accum), MySet.insert i accum
+    | UnderbarPattern -> true, accum
+  in List.iter (fun (pp, _) -> 
+      try 
+        let valid, _ = loop pp [] in assert valid
+      with _ -> err "match variable must not be same") pattern_list
 
 let check_pattern_exhaustive tyenv pattern_list = 
   let rec sigma ideal_pattern patterns = 
@@ -184,7 +210,7 @@ let check_pattern_exhaustive tyenv pattern_list =
       let rec loop_match_flags current_flags = 
         match current_flags with
         | Undecidable extends::_ -> 
-          List.iter (fun i -> sigma i patterns) extends 
+          List.iter (fun i -> sigma i patterns) extends
         | _::rest_flags -> loop_match_flags rest_flags
         | [] -> err "Undecidable does not exist" in
       loop_match_flags match_flags in
@@ -308,6 +334,7 @@ let rec ty_exp tyenv = function
     (tysc_of_ty (subst_type main_subst (ty_of_tysc e2_ty)), main_subst)
   | MatchExp (case_exp, case_list) -> 
     let case_tysc, case_subst = ty_exp tyenv case_exp in
+    pattern_same_var_check case_list;
     let rec extend_pattern_env p cty (accum_tyenv: tysc Environment.t) =
       match p, cty with
       | ConsListPattern(p1, p2), TyList lty ->
@@ -317,14 +344,20 @@ let rec ty_exp tyenv = function
       | TuplePattern (p1, p2), TyTuple(ty1, ty2) -> 
         let p1_tyenv = extend_pattern_env p1 ty1 accum_tyenv in
         extend_pattern_env p2 ty2 p1_tyenv
-      | VariantPattern(pt_tyid, ipt), TyArityUser(ty_id, ity) ->
-        if pt_tyid = ty_id 
-        then extend_pattern_env ipt ity accum_tyenv
-        else raise MatchFail
+      | SingleVariantPattern pt_tyid, TyUser ty_id -> accum_tyenv
+      | VariantPattern(pt_tyid, ipt), TyUser ty_id ->
+        (* pt_tyid is Yogurt, ty_id is food *)
+        let pt_tyscname = Environment.lookup pt_tyid tyenv in
+        let pt_ty = ty_of_tysc pt_tyscname in
+        (match pt_ty with
+         | TyFun(pt_tyconstructor, TyUser pt_tyname) -> 
+           extend_pattern_env ipt pt_tyconstructor accum_tyenv
+         | _ -> err "error in match")
       | IdPattern id, (_ as tt) -> 
         if id = "_" then accum_tyenv
         else
           Environment.extend id (tysc_of_ty tt) accum_tyenv
+      | UnderbarPattern, _ -> accum_tyenv
       | _ -> raise MatchFail in
     (* check pattern exhaustive *)
     check_pattern_exhaustive tyenv (Core.List.map case_list ~f:(fun(p, _) -> p));
