@@ -227,6 +227,45 @@ let advanced_match_tests = "advanced match" >::: [
                                                match_exhaustive_error
                                                (fun _ -> test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with Hotdog b -> 3"])
                                            );
+    (* ub dtands for underbar *)
+    "user arity match with ub" >:: (fun _ -> assert_equal_content
+                                       {ty = TyInt; v = Some (IntV 3)}
+                                       (test_eval_loop ["type food = Yogurt of int | Hotdog of int"; "match Hotdog 3 with | Hotdog _ -> 3 | Yogurt _ -> 5"])
+                                   );
+    "user arity match 2 with ub" >:: (fun _ -> assert_equal_content
+                                         {ty = TyInt; v = Some (IntV 3)}
+                                         (test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with | Hotdog _ -> 3 | Yogurt _ -> 10"])
+                                     );
+    "user arity match not exhaustive2 with ub" >:: (fun _ -> assert_raises
+                                                       match_exhaustive_error
+                                                       (fun _ -> test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with Hotdog _ -> 3"])
+                                                   );
+    "user complex arity match " >:: (fun _ -> assert_equal_content
+                                        {ty = TyInt; v = Some (IntV 8)}
+                                        (test_eval_loop ["type food = Yogurt of int * int | Hotdog of int * int";
+                                                         "match Hotdog (3, 5) with | Hotdog (a, b) -> a + b | Yogurt(a, b) -> a;;"])
+                                    );
+  ]
+
+let advanced_tests = "advanced code tests" >::: [
+    "eval type simple test" >:: (fun _ -> assert_equal_content
+                                    {ty = TyInt; v = Some (IntV 3)}
+                                    (test_eval_loop ["type tree = Sum | Mult"
+                                                    ;"let a = Sum"
+                                                    ;"let eval x = match x with
+                                              | Sum -> 3
+                                              | Mult -> 5"
+                                                    ;"eval a"])
+                                );
+    "eval type test" >:: (fun _ -> assert_equal_content
+                             {ty = TyInt; v = Some (IntV 55)}
+                             (test_eval_loop ["type tree = Sum of int * int | Mult of int * int";
+                                              "let a = Sum (5, 50)";
+                                              "let eval x = match x with
+                                              | Sum (a, b) -> a + b
+                                              | Mult (a, b) -> a * b";
+                                              "eval a"])
+                         );
   ]
 
 let polylet_tests = "polylet tests" >::: [
@@ -284,6 +323,7 @@ let tests = "all tests" >::: [
     polylet_tests;
     user_type_tests;
     advanced_match_tests;
+    advanced_tests;
   ]
 
 let run_test () = 

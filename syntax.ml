@@ -123,6 +123,12 @@ let rec string_of_ty = function
     "@" ^ id
   | TyDummy -> "@@@"
 
+let string_of_eqls eqls =
+  let open Core in
+  let string_of_eql (t1, t2) =
+    Printf.sprintf "(%s, %s)" (string_of_ty t1) (string_of_ty t2) in
+  "[" ^ String.concat ~sep:"; " (List.map eqls ~f:string_of_eql) ^ "]\n"
+
 let rec string_of_pattern p = 
   let open Core in
   match p with
