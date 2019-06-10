@@ -34,6 +34,12 @@ type token =
   | IF
   | ID of (Syntax.id)
   | FUN
+  | FPLUS
+  | FMULT
+  | FMINUS
+  | FLT
+  | FLOATV of (float)
+  | FDIVIDE
   | FALSE
   | EQ
   | ELSE
@@ -41,7 +47,6 @@ type token =
   | DFUN
   | CONS
   | COMMA
-  | COLON
   | BOOL
   | AND
 

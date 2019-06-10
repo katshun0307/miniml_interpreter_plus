@@ -31,9 +31,17 @@ rule main = parse
 | "-"? ['0'-'9']+
     { Parser.INTV (int_of_string (Lexing.lexeme lexbuf)) }
 
+| "-"? ['0'-'9']+ "." ['0'-'9']*
+    { Parser.FLOATV (float_of_string (Lexing.lexeme lexbuf)) }
+
 | "(" { Parser.LPAREN }
 | ")" { Parser.RPAREN }
 | ";;" { Parser.SEMISEMI }
+| "+." { Parser.FPLUS }
+| "-." { Parser.FMINUS }
+| "*." { Parser.FMULT }
+| "/." { Parser.FDIVIDE }
+| "<." { Parser.FLT }
 | "+" { Parser.PLUS }
 | "-" { Parser.MINUS }
 | "*" { Parser.MULT }

@@ -1,3 +1,5 @@
+(** The main module of this project. *)
+
 open Syntax
 open Eval
 open Typing
@@ -64,6 +66,7 @@ let aspec = Arg.align [
     ("-load", Arg.Set_string load_file, 
      "load program before starting REPL")]
 
+(** the main default REPL function *)
 let main() = 
   Arg.parse aspec (fun s -> srcfile := s) usage;
   if !test then Test.run_test ()

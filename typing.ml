@@ -32,6 +32,7 @@ let rec subst_type s ty =
     | TyFun(a, b) -> TyFun(resolve_subst subst_pair a, resolve_subst subst_pair b)
     | TyInt -> TyInt
     | TyBool -> TyBool
+    | TyFloat -> TyFloat
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
     | TyUser id -> TyUser id
@@ -93,7 +94,9 @@ let rec unify (eqs: (ty * ty) list): (tyvar * ty) list  =
 
 let ty_prim op (ty1:ty) (ty2:ty) = match op with
   | Plus | Minus | Mult | Div | Modulo -> (TyInt, (ty1, TyInt) :: (ty2, TyInt) :: [])
+  | FPlus | FMinus | FMult | FDiv -> (TyFloat, (ty1, TyFloat) :: (ty2, TyFloat) :: [])
   | Lt  -> (TyBool, (ty1, TyInt) :: (ty2, TyInt) :: [])
+  | FLt  -> (TyBool, (ty1, TyFloat) :: (ty2, TyFloat) :: [])
   | Eq -> (TyBool, (ty1, ty2) :: [])
 
 let ty_logic op (ty1:ty) (ty2:ty) = 
@@ -105,7 +108,8 @@ let get_type = function
   | TyVar _ -> "tyvar"
   | TyBool -> "tybool"
   | TyInt -> "tyint"
-  | TyFun _ -> "tyfun"   
+  | TyFloat -> "tyfloat"
+  | TyFun _ -> "tyfun"
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
   | TyUser ty_name -> ty_name
@@ -228,6 +232,7 @@ let rec ty_exp tyenv = function
      with Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit _ -> (tysc_of_ty(TyInt), [])
   | BLit _ -> (tysc_of_ty(TyBool), [])
+  | FLit _ -> (tysc_of_ty(TyFloat), [])
   | BinOp (op, exp1, exp2) -> 
     let tyarg1, tysubst1 = ty_exp tyenv exp1 in
     let tyarg2, tysubst2 = ty_exp tyenv exp2 in

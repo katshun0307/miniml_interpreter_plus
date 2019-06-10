@@ -3,15 +3,17 @@ open Syntax
 %}
 
 %token LPAREN RPAREN SEMISEMI
-%token PLUS MINUS MULT DIVIDE MODULO LT AND OR 
+%token PLUS MINUS MULT DIVIDE MODULO LT AND OR
+%token FPLUS FMINUS FMULT FDIVIDE FLT
 %token IF THEN ELSE TRUE FALSE
 %token LET IN EQ LETAND REC
-%token RARROW FUN DFUN 
+%token RARROW FUN DFUN
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
-%token INT BOOL LIST COLON UNDERBAR
+%token INT BOOL LIST UNDERBAR
 %token TYPE OF
 
 %token <int> INTV
+%token <float> FLOATV
 %token <Syntax.id> ID
 %token <Syntax.tyid> TYID
 
@@ -53,7 +55,7 @@ TYDECLSExpr :
 
 Expr :
   | e=IfExpr { e } (* if expression *)
-  | e=EqualExpr { e } (* boolean expression *)  
+  | e=ORExpr { e } (* boolean expression *)  
   | e=LETExpr { e } (* let expression *)
   | e=LETRECExpr { e } (* recursive let expression *)
   | e=FUNExpr { e } (* static function expression *)
@@ -72,7 +74,6 @@ ListExpr :
 
 ListContentExpr : 
   | SQRPAREN { [] }
-  | e=Expr SEMI SQRPAREN { [e] }
   | e=Expr SQRPAREN { [e] }
   | e=Expr SEMI next=ListContentExpr { e::next }
 
@@ -105,7 +106,7 @@ MatchCaseExpr3 :
 (* tuple expression *)
 TupleExpr : 
   | e1=Expr COMMA e2=Expr { TupleExp(e1, e2) } 
-  | LPAREN e1=Expr COMMA e2=Expr RPAREN { TupleExp(e1, e2) } 
+  | LPAREN e1=Expr COMMA e2=Expr RPAREN { TupleExp(e1, e2) }
 
 (* let expression *)
 LETExpr :
@@ -128,35 +129,40 @@ MULTILETExpr :
   | x=ID EQ e=Expr { (x, e) } (* for simple declarations *)
   | f=ID params=LETFUNPARAExpr e=Expr { (f, FunExp(params, e)) } (* for function declarations using let *) */
 
-EqualExpr : (* values equals *)
-  | l=ORExpr EQ r=ORExpr { BinOp (Eq, l, r) }
-  | e=ORExpr { e } 
-
 (* logical expressions *)
 ORExpr : (* or *)
-  | l=ANDExpr OR r=ANDExpr { LogicOp (Or, l, r) }
+  | l=ORExpr OR r=ANDExpr { LogicOp (Or, l, r) }
   | e=ANDExpr { e }
 
 ANDExpr : (* and *)
-  | l=LTExpr AND r=ANDExpr { LogicOp (And, l, r) }
+  | l=ANDExpr AND r=EqualExpr { LogicOp (And, l, r) }
+  | e=EqualExpr { e }
+
+EqualExpr : 
+  | l=EqualExpr EQ r=LTExpr { BinOp (Eq, l, r) }
   | e=LTExpr { e }
 
 (* number expressions *)
 LTExpr : (* less than expression *)
-  | l=AdditionExpr LT r=AdditionExpr { BinOp (Lt, l, r) }
+  | l=LTExpr LT r=AdditionExpr { BinOp (Lt, l, r) }
+  | l=LTExpr FLT r=AdditionExpr { BinOp (FLt, l, r) }
   | e=AdditionExpr { e }
 
 AdditionExpr : (* addition *)
   | l=AdditionExpr PLUS r=SubtractionExpr { BinOp (Plus, l, r) }
+  | l=AdditionExpr FPLUS r=SubtractionExpr { BinOp (FPlus, l, r) }
   | e=SubtractionExpr { e }
 
 SubtractionExpr : (* subtraction *)
   | l=SubtractionExpr MINUS r=MultExpr { BinOp (Minus, l, r) }
+  | l=SubtractionExpr FMINUS r=MultExpr { BinOp (FMinus, l, r) }
   | e=MultExpr { e }
 
 MultExpr : (* multiplication *)
-  | l=MultExpr MULT r=AppExpr { BinOp (Mult, l, r) }
+  | l=MultExpr MULT r=AppExpr { BinOp(Mult, l, r) }
+  | l=MultExpr FMULT r=AppExpr { BinOp(FMult, l, r) }
   | l=MultExpr DIVIDE r=AppExpr { BinOp(Div, l, r) }
+  | l=MultExpr FDIVIDE r=AppExpr { BinOp(FDiv, l, r) }
   | l=MultExpr MODULO r=AppExpr { BinOp(Modulo, l, r) }
   | e=AppExpr { e }
 
@@ -183,19 +189,25 @@ DFunBottomultExpr : (* ....xn-1 xn -> expr *)
   | x=ID b=DFunBottomultExpr { DFunExp (x, b) }
 
 BinExpr : (* binary expression *)
-  |  LPAREN EQ RPAREN     { FunExp(["a" ; "b"], BinOp   (Eq,      Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN PLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Plus,    Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (Minus,   Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MULT RPAREN   { FunExp(["a" ; "b"], BinOp   (Mult,    Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN DIVIDE RPAREN { FunExp(["a" ; "b"], BinOp   (Div,     Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MODULO RPAREN { FunExp(["a" ; "b"], BinOp   (Modulo,  Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN LT RPAREN     { FunExp(["a" ; "b"], BinOp   (Lt,      Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN AND RPAREN    { FunExp(["a" ; "b"], LogicOp (And,     Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN OR RPAREN     { FunExp(["a" ; "b"], LogicOp (Or,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN EQ RPAREN      { FunExp(["a" ; "b"], BinOp   (Eq,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN PLUS RPAREN    { FunExp(["a" ; "b"], BinOp   (Plus,    Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MINUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Minus,   Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MULT RPAREN    { FunExp(["a" ; "b"], BinOp   (Mult,    Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN DIVIDE RPAREN  { FunExp(["a" ; "b"], BinOp   (Div,     Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN MODULO RPAREN  { FunExp(["a" ; "b"], BinOp   (Modulo,  Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN LT RPAREN      { FunExp(["a" ; "b"], BinOp   (Lt,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN AND RPAREN     { FunExp(["a" ; "b"], LogicOp (And,     Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN OR RPAREN      { FunExp(["a" ; "b"], LogicOp (Or,      Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN FPLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (FPlus,   Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN FMINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (FMinus,  Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN FMULT RPAREN   { FunExp(["a" ; "b"], BinOp   (FMult,   Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN FDIVIDE RPAREN { FunExp(["a" ; "b"], BinOp   (FDiv,    Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN FLT RPAREN     { FunExp(["a" ; "b"], BinOp   (FLt,     Var (ID "a"), Var (ID "b"))) }
 
 (* most basic expressions *)
 AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | i=INTV { ILit i } 
+  | f=FLOATV { FLit f }
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }

@@ -12,7 +12,19 @@ type vars =
   | ID of string
   | VARIANT of string
 
-type binOp = Plus | Minus | Mult | Div | Lt | Modulo | Eq
+type binOp = 
+  | Plus 
+  | Minus 
+  | Mult 
+  | Div 
+  | Lt 
+  | Modulo 
+  | Eq 
+  | FPlus
+  | FMinus
+  | FMult 
+  | FDiv 
+  | FLt 
 type logicOp = And | Or 
 
 type list_pattern = 
@@ -25,6 +37,7 @@ type tyvar = int
 type ty = 
   | TyInt 
   | TyBool
+  | TyFloat
   | TyVar of tyvar
   | TyFun of ty * ty
   | TyList of ty
@@ -45,6 +58,7 @@ type exp =
   | Var of vars (* Var "x" --> x *)
   | ILit of int (* ILit 3 --> 3 *)
   | BLit of bool (* BLit true --> true *)
+  | FLit of float (* FLit 0.5 --> 0.5 *)
   | ListExp of exp list (* list expression *)
   | BinOp of binOp * exp * exp
   | LogicOp of logicOp * exp * exp
@@ -90,6 +104,7 @@ let tyvar_string_of_int n =
 let rec pp_ty = function
   | TyInt -> print_string "int"
   | TyBool -> print_string "bool"
+  | TyFloat -> print_string "float"
   | TyVar id -> print_string (tyvar_string_of_int id)
   | TyFun(a, b)-> 
     print_string "(";
@@ -112,6 +127,7 @@ let rec pp_ty = function
 let rec string_of_ty = function
   | TyInt ->  "int"
   | TyBool ->  "bool"
+  | TyFloat -> "float"
   | TyVar id ->  tyvar_string_of_int id
   | TyFun(a, b) -> 
     (match a with
@@ -201,7 +217,7 @@ let freevar_tysc (TyScheme(b, ty)) =
   let bounds = MySet.from_list b in
   let rec loop ty = 
     match ty with
-    | TyInt | TyBool | TyUser _ | TyDummy -> MySet.empty
+    | TyInt | TyBool | TyFloat | TyUser _ | TyDummy -> MySet.empty
     | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
     | TyList t1 -> loop t1
     | TyVar v -> 

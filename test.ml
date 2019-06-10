@@ -108,7 +108,29 @@ let binop_tests = "binary operation tests" >::: [
                              {ty = TyInt; v = Some (IntV 0)}
                              (test_eval_loop ["3 / 4 * 3 % 2 / 5 % 3 * 3;;"])
                          );
+  ]
 
+let float_binop_tests = "float binary operation tests" >::: [
+    "test0" >:: (fun _ -> assert_equal_content 
+                    {ty = TyBool; v = Some (BoolV false)}
+                    (test_eval_loop ["0.5 <. 0.2"])
+                );
+    "test1" >:: (fun _ -> assert_equal_content 
+                    {ty = TyBool; v = Some (BoolV false)}
+                    (test_eval_loop ["2. = 5."])
+                );
+    "test2" >:: (fun _ -> assert_equal_content 
+                    {ty = TyBool; v = Some (BoolV true)}
+                    (test_eval_loop ["2. = 2."])
+                );
+    "test3" >:: (fun _ -> assert_equal_content 
+                    {ty = TyBool; v = Some (BoolV true)}
+                    (test_eval_loop ["2. <. 5. && 3. <. 8.;"])
+                );
+    "test4" >:: (fun _ -> assert_equal_content 
+                    {ty = TyBool; v = Some (BoolV false)}
+                    (test_eval_loop ["0.5 <. 0.2 || 5 < 3 || false"])
+                );
   ]
 
 let decl_tests = ("test suites for declaration" >::: [
@@ -227,7 +249,7 @@ let advanced_match_tests = "advanced match" >::: [
                                                match_exhaustive_error
                                                (fun _ -> test_eval_loop ["type food = Yogurt of int | Hotdog of bool"; "match Hotdog true with Hotdog b -> 3"])
                                            );
-    (* ub dtands for underbar *)
+    (* ub stands for underbar *)
     "user arity match with ub" >:: (fun _ -> assert_equal_content
                                        {ty = TyInt; v = Some (IntV 3)}
                                        (test_eval_loop ["type food = Yogurt of int | Hotdog of int"; "match Hotdog 3 with | Hotdog _ -> 3 | Yogurt _ -> 5"])
@@ -316,6 +338,7 @@ let user_type_tests = "user type tests" >::: [
 
 let tests = "all tests" >::: [
     binop_tests;
+    float_binop_tests;
     decl_tests; 
     recur_tests; 
     list_tests; 

@@ -10,6 +10,7 @@ exception SameVarError
 type exval =
   | IntV of int
   | BoolV of bool
+  | FloatV of float
   | ProcV of id * exp * dnval Environment.t ref
   | ListProcV of id list * exp * dnval Environment.t ref
   | DProcV of id * exp
@@ -28,6 +29,7 @@ let err s = raise (Error s)
 let rec string_of_exval = function
     IntV i -> string_of_int i
   | BoolV b -> string_of_bool b
+  | FloatV f -> string_of_float f
   | ProcV _ -> "<fun(´･ω･｀* (⊃⌒＊⌒)>"
   | ListProcV _ -> "<fun>"
   | DProcV _ -> "<dfun>"
@@ -42,6 +44,7 @@ let pp_val v = print_string (string_of_exval v)
 let rec check_equals = function
   | IntV i1, IntV i2 -> i1 = i2
   | BoolV i1, BoolV i2 -> i1 = i2
+  | FloatV i1, FloatV i2 -> i1 = i2
   | ListV l1, ListV l2 -> 
     (try 
        List.fold2_exn l1 l2 ~init:true ~f:(fun x y z -> x && check_equals (y, z))
@@ -64,6 +67,16 @@ let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
   | Modulo, IntV i1, IntV i2 -> IntV (i1 % i2)
   | Modulo, _, _ -> err ("Both arguments must be integer: %")
   | Eq, _, _ -> BoolV (check_equals (arg1, arg2))
+  | FPlus, FloatV i1, FloatV i2 -> FloatV (i1 +. i2)
+  | FPlus, _, _ -> err ("Both arguments must be integer: +")
+  | FMinus, FloatV i1, FloatV i2 -> FloatV (i1 -. i2)
+  | FMinus, _, _ -> err ("Both arguments must be integer: -")
+  | FMult, FloatV i1, FloatV i2 -> FloatV (i1 *. i2)
+  | FMult, _, _ -> err ("Both arguments must be integer: *")
+  | FDiv, FloatV i1, FloatV i2 -> FloatV (i1 /. i2)
+  | FDiv, _, _ -> err ("Both arguments must be integer: /")
+  | FLt, FloatV i1, FloatV i2 -> BoolV (i1 <. i2)
+  | FLt, _, _ -> err ("Both arguments must be integer: <")
 
 let rec find l n = 
   match l with 
@@ -85,6 +98,7 @@ let rec eval_exp env = function
         Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit i -> IntV i
   | BLit b -> BoolV b
+  | FLit f -> FloatV f
   | BinOp (op, exp1, exp2) -> 
     let arg1 = eval_exp env exp1 in
     let arg2 = eval_exp env exp2 in
