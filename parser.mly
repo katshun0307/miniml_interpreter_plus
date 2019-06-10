@@ -10,7 +10,7 @@ open Syntax
 %token RARROW FUN DFUN
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
 %token INT BOOL LIST UNDERBAR
-%token TYPE OF
+%token TYPE OF COLON LCURLY RCURLY
 
 %token <int> INTV
 %token <float> FLOATV
@@ -28,6 +28,7 @@ toplevel :
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
   | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
+  | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(recname, fields) }
 
 TypeExpr :
   | INT { TyInt }
@@ -53,6 +54,12 @@ TYDECLSExpr :
   | variant=TYID SPLIT rest=TYDECLSExpr { (variant, TyDummy) :: rest }
   | variant=TYID OF t=TypeExpr SPLIT rest=TYDECLSExpr { (variant, t)::rest }
 
+(* record declarations *)
+FieldsDeclExpr : 
+  | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t)] }
+  | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t)] }
+  | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t):: rest }
+
 Expr :
   | e=IfExpr { e } (* if expression *)
   | e=ORExpr { e } (* boolean expression *)  
@@ -63,6 +70,16 @@ Expr :
   | e=BinExpr { e } (* binary expressions *) 
   | e=MatchExpr { e } (* match expressions *)
   | e=TupleExpr { e } (* tuple expression *)
+  | e=RecordExpr { e } (* record expression *)
+
+(* use records *)
+RecordExpr : 
+  | LCURLY content=RecordContentExpr { RecordExp(content) }
+
+RecordContentExpr : 
+  | fieldname=ID EQ content=Expr RCURLY { [(fieldname, content)] }
+  | fieldname=ID EQ content=Expr SEMI RCURLY { [(fieldname, content)] }
+  | fieldname=ID EQ content=Expr SEMI rest=RecordContentExpr { (fieldname, content):: rest }
 
 (* if expression *)
 IfExpr :

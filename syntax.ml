@@ -77,12 +77,14 @@ type exp =
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
+  | RecordExp of (id * exp) list (* (fieldname * exp) list *)
 
 type program =
     Exp of exp
   | Decl of id * exp
   | RecDecl of id * id * exp
   | TypeDecl of id * ((tyid * ty) list)
+  | RecordDecl of id * ((id * ty) list)
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty

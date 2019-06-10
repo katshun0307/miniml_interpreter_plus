@@ -271,4 +271,5 @@ let eval_decl env = function
       | [] -> accum_env in
     let env' = extend_env variant_list env in
     (ty_name, env', ListV (List.map variant_list ~f:(fun (x, _) -> UserV x)))
-
+  | RecordDecl (recname, fieldslist) -> 
+    err "not implemented"

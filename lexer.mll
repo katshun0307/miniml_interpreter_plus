@@ -38,6 +38,8 @@ rule main = parse
 
 | "(" { Parser.LPAREN }
 | ")" { Parser.RPAREN }
+| "{" { Parser.LCURLY }
+| "}" { Parser.RCURLY }
 | ";;" { Parser.SEMISEMI }
 | "+." { Parser.FPLUS }
 | "-." { Parser.FMINUS }
@@ -61,6 +63,7 @@ rule main = parse
 | "::" { Parser.CONS }
 | "," { Parser.COMMA }
 | "_" { Parser.UNDERBAR }
+| ":" { Parser.COLON }
 | ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
     { let id = Lexing.lexeme lexbuf in
       try 

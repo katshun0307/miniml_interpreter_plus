@@ -15,6 +15,7 @@ type token =
   | SEMI
   | RPAREN
   | REC
+  | RCURLY
   | RARROW
   | PLUS
   | OR
@@ -28,6 +29,7 @@ type token =
   | LIST
   | LETAND
   | LET
+  | LCURLY
   | INT_OF_FLOAT
   | INTV of (int)
   | INT
@@ -49,6 +51,7 @@ type token =
   | DFUN
   | CONS
   | COMMA
+  | COLON
   | BOOL
   | AND
 
