@@ -4,7 +4,7 @@ open Syntax
 
 %token LPAREN RPAREN SEMISEMI
 %token PLUS MINUS MULT DIVIDE MODULO LT AND OR
-%token FPLUS FMINUS FMULT FDIVIDE FLT
+%token FPLUS FMINUS FMULT FDIVIDE FLT INT_OF_FLOAT FLOAT_OF_INT
 %token IF THEN ELSE TRUE FALSE
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN
@@ -151,6 +151,8 @@ LTExpr : (* less than expression *)
 AdditionExpr : (* addition *)
   | l=AdditionExpr PLUS r=SubtractionExpr { BinOp (Plus, l, r) }
   | l=AdditionExpr FPLUS r=SubtractionExpr { BinOp (FPlus, l, r) }
+  | FLOAT_OF_INT e=AdditionExpr { Float_of_int e }
+  | INT_OF_FLOAT e=AdditionExpr { Int_of_float e }
   | e=SubtractionExpr { e }
 
 SubtractionExpr : (* subtraction *)

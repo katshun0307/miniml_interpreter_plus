@@ -59,6 +59,8 @@ type exp =
   | ILit of int (* ILit 3 --> 3 *)
   | BLit of bool (* BLit true --> true *)
   | FLit of float (* FLit 0.5 --> 0.5 *)
+  | Float_of_int of exp
+  | Int_of_float of exp
   | ListExp of exp list (* list expression *)
   | BinOp of binOp * exp * exp
   | LogicOp of logicOp * exp * exp

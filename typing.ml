@@ -233,6 +233,16 @@ let rec ty_exp tyenv = function
   | ILit _ -> (tysc_of_ty(TyInt), [])
   | BLit _ -> (tysc_of_ty(TyBool), [])
   | FLit _ -> (tysc_of_ty(TyFloat), [])
+  | Float_of_int e1 -> 
+    let tysc1, tysubst1 = ty_exp tyenv e1 in
+    let equals = (TyInt, ty_of_tysc tysc1) :: (eqls_of_subst tysubst1) in
+    let main_subst = unify equals in
+    (tysc_of_ty TyFloat, main_subst)
+  | Int_of_float e1 -> 
+    let tysc1, tysubst1 = ty_exp tyenv e1 in
+    let equals = (TyFloat, ty_of_tysc tysc1) :: (eqls_of_subst tysubst1) in
+    let main_subst = unify equals in
+    (tysc_of_ty TyInt, main_subst)
   | BinOp (op, exp1, exp2) -> 
     let tyarg1, tysubst1 = ty_exp tyenv exp1 in
     let tyarg2, tysubst2 = ty_exp tyenv exp2 in

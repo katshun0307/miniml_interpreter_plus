@@ -19,6 +19,8 @@ let reservedWords = [
   ("list", Parser.LIST);
   ("type", Parser.TYPE);
   ("of", Parser.OF);
+  ("float_of_int", Parser.FLOAT_OF_INT);
+  ("int_of_float", Parser.INT_OF_FLOAT);
 ] 
 }
 

@@ -99,6 +99,18 @@ let rec eval_exp env = function
   | ILit i -> IntV i
   | BLit b -> BoolV b
   | FLit f -> FloatV f
+  | Float_of_int e1 -> 
+    let v1 = eval_exp env e1 in
+    (match v1 with
+     | IntV i -> FloatV (float_of_int i)
+     | _ -> err "float_of_int failed"
+    )
+  | Int_of_float e1 -> 
+    let v1 = eval_exp env e1 in
+    (match v1 with
+     | FloatV f -> IntV (int_of_float f)
+     | _ -> err "int_of_float failed"
+    )
   | BinOp (op, exp1, exp2) -> 
     let arg1 = eval_exp env exp1 in
     let arg2 = eval_exp env exp2 in

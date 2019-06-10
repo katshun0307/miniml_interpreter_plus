@@ -28,6 +28,7 @@ type token =
   | LIST
   | LETAND
   | LET
+  | INT_OF_FLOAT
   | INTV of (int)
   | INT
   | IN
@@ -38,6 +39,7 @@ type token =
   | FMULT
   | FMINUS
   | FLT
+  | FLOAT_OF_INT
   | FLOATV of (float)
   | FDIVIDE
   | FALSE
