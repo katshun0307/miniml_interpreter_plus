@@ -9,8 +9,8 @@ open Syntax
 %token LET IN EQ LETAND REC
 %token RARROW FUN DFUN
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
-%token INT BOOL LIST UNDERBAR
-%token TYPE OF COLON LCURLY RCURLY
+%token INT BOOL LIST UNDERBAR FLOAT
+%token TYPE OF COLON LCURLY RCURLY DOT
 
 %token <int> INTV
 %token <float> FLOATV
@@ -33,6 +33,7 @@ toplevel :
 TypeExpr :
   | INT { TyInt }
   | BOOL { TyBool }
+  | FLOAT { TyFloat }
   | i=ID { TyUser i }
   | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
   | lty=TypeExpr LIST { TyList lty }
@@ -112,6 +113,7 @@ MatchCaseExpr1 : (* a single pattern *)
 MatchCaseExpr2 :
   | h=MatchCaseExpr3 CONS t=MatchCaseExpr2 { ConsListPattern (h, t) }
   | var=TYID vv=MatchCaseExpr1 { VariantPattern (var, vv) }
+  | LCURLY content=RecordMatchTailExpr { let (l, f) = content in RecordPattern(l, f) }
   | e=MatchCaseExpr3 { e }
 
 MatchCaseExpr3 :
@@ -119,6 +121,14 @@ MatchCaseExpr3 :
   | id=ID { IdPattern id }
   | tid=TYID { SingleVariantPattern tid }
   | UNDERBAR { UnderbarPattern }
+
+RecordMatchTailExpr : 
+  | UNDERBAR RCURLY { ([], true) }
+  | UNDERBAR SEMI RCURLY { ([], true) }
+  | fieldname=ID EQ pattern=MatchCaseExpr1 RCURLY { ([(fieldname, pattern)], false) }
+  | fieldname=ID EQ pattern=MatchCaseExpr1 SEMI RCURLY { ([(fieldname, pattern)], false) }
+  | UNDERBAR SEMI rest=RecordMatchTailExpr { let (l, _) = rest in (l, true) }
+  | fieldname=ID EQ pattern=MatchCaseExpr1 SEMI rest=RecordMatchTailExpr { let (l, f) = rest in ((fieldname, pattern):: l, f) }
 
 (* tuple expression *)
 TupleExpr : 
@@ -189,6 +199,7 @@ AppExpr : (* function application *)
   | e1=AppExpr e2=AExpr { AppExp(e1, e2) }
   | e1=BinExpr e2=AExpr { AppExp(e1, e2) }
   | vari=TYID e2=Expr { AppExp(Var (VARIANT vari), e2) }
+  | e1=AppExpr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
   | e=AExpr { e }
 
 (* static function expression *)

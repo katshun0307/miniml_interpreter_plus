@@ -1,5 +1,6 @@
 open Syntax
 open MySet
+open Core
 
 exception Error of string
 exception MatchNotExhaustive
@@ -13,6 +14,9 @@ type subst = (tyvar * ty) list
 
 (* get list of variant names from user-defined type name *)
 let variant_env = ref (Environment.empty: (tyid * ty) list Environment.t)
+
+(* get list of record contents (field name and type) from record type name *)
+let record_env = ref (Environment.empty: (id * ty) list Environment.t)
 
 (* printing *)
 let rec string_of_subst = function 
@@ -47,11 +51,11 @@ let eqls_of_subst subst =
   let reform sub = 
     let ((id: tyvar), (t: ty)) = sub in 
     (TyVar id, t) in
-  List.map reform subst
+  List.map ~f:reform subst
 
 (* apply subst:(substitution) to eql:(list of equal types) *)
 let subst_eqs subst eql = 
-  List.map (fun (t1, t2) -> (subst_type [subst] t1, subst_type [subst] t2)) eql
+  List.map ~f:(fun (t1, t2) -> (subst_type [subst] t1, subst_type [subst] t2)) eql
 
 (* free type variables in the current environment *)
 let rec freevar_tyenv (tyenv: tyenv) = 
@@ -123,6 +127,18 @@ let type_list_to_equals l =
     | [] -> raise (Error "entered unexpected case") in
   loop [] l
 
+let get_record_type_from_fields fieldname_list is_underbar = 
+  let rec loop current_env = 
+    match current_env with
+    | (spec_list, tyname):: rest -> 
+      let spec_fname_list = List.map ~f:(fun (fname, _) -> fname) spec_list in
+      if MySet.equals spec_fname_list fieldname_list
+      || (is_underbar && MySet.diff fieldname_list spec_fname_list = [])
+      then tyname
+      else loop rest
+    | [] -> raise MatchNotExhaustive in
+  loop (Environment.reverse (!record_env))
+
 (* >>> check if pattern matching is exhasutive >>> *)
 type match_res = 
   | Match
@@ -134,7 +150,7 @@ let string_of_match_res = function
   | NoMatch -> "NoMatch"
   | Undecidable pl -> 
     "Undecidable["
-    ^ Core.String.concat ~sep:"; " (List.map string_of_pattern pl)
+    ^ Core.String.concat ~sep:"; " (List.map ~f:string_of_pattern pl)
     ^ "]"
 
 (* check if ideal pattern matches current pattern. (ideal, current) *)
@@ -143,15 +159,15 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
   match (ideal_p, pp) with
   | ConsListPattern(iph, ipt), ConsListPattern(ph, pt) -> 
     (match (matches tyenv (iph, ph)), (matches tyenv (ipt, pt)) with
-     | Undecidable (_ as l), _ -> Undecidable (List.map (fun a -> ConsListPattern(a, ipt)) l) 
-     | _, Undecidable (_ as l) -> Undecidable (List.map (fun a -> ConsListPattern(iph, a)) l)
+     | Undecidable (_ as l), _ -> Undecidable (List.map ~f:(fun a -> ConsListPattern(a, ipt)) l) 
+     | _, Undecidable (_ as l) -> Undecidable (List.map ~f:(fun a -> ConsListPattern(iph, a)) l)
      | NoMatch, _ | _, NoMatch -> NoMatch
      | Match, Match -> Match )
   | TailListPattern, TailListPattern -> Match
   | TuplePattern(ip1, ip2), TuplePattern(p1, p2) -> 
     (match (matches tyenv (ip1, p1)), (matches tyenv (ip2, p2)) with
-     | Undecidable (_ as l), _ -> Undecidable (List.map (fun a -> TuplePattern(a, ip2)) l) 
-     | _, Undecidable (_ as l) -> Undecidable (List.map (fun a -> TuplePattern(ip1, a)) l)
+     | Undecidable (_ as l), _ -> Undecidable (List.map ~f:(fun a -> TuplePattern(a, ip2)) l) 
+     | _, Undecidable (_ as l) -> Undecidable (List.map ~f:(fun a -> TuplePattern(ip1, a)) l)
      | NoMatch, _ | _, NoMatch -> NoMatch
      | Match, Match -> Match )
   | SingleVariantPattern ityid, SingleVariantPattern tyid -> 
@@ -159,9 +175,29 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
   | VariantPattern(ityid, ip), VariantPattern(tyid, p) -> 
     if tyid = ityid then
       match matches tyenv (ip, p) with
-      | Undecidable exl -> Undecidable (List.map (fun ex -> VariantPattern(tyid, ex)) exl)
+      | Undecidable exl -> Undecidable (List.map ~f:(fun ex -> VariantPattern(tyid, ex)) exl)
       | _ as res -> res
     else NoMatch
+  | RecordPattern (ideal_l, _), RecordPattern (current_l, is_underbar) -> 
+    let current_fields = List.map ~f:(fun (fname, _) -> fname) current_l in
+    let ideal_fields = List.map ~f:(fun (fname, _) -> fname) ideal_l in
+    let is_illegal_fields = not (MySet.diff current_fields ideal_fields = []) in
+    let is_full_cover = (MySet.diff ideal_fields current_fields = []) in 
+    if is_illegal_fields || (not is_full_cover && not is_underbar) 
+    then NoMatch
+    else
+      (* for each field in current_pattern, check if ideal_pattern matches *)
+      let rec loop current_patterns = 
+        match current_patterns with
+        | (fname, current_pt):: rest -> 
+          let ideal_pt = List.Assoc.find_exn ideal_l ~equal:(=) fname in
+          (match matches tyenv (ideal_pt, current_pt) with
+           | NoMatch -> NoMatch
+           | Undecidable ex_l -> 
+             NoMatch
+           | Match -> Match)
+        | [] -> Match
+      in loop current_l
   | _, IdPattern _ -> Match
   | IdPattern _, ConsListPattern _ | IdPattern _, TailListPattern ->
     Undecidable [ConsListPattern(IdPattern "_", TailListPattern); TailListPattern]
@@ -170,32 +206,40 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
     (match ty_of_tysc tysc_of_variant with
      | TyUser tt -> 
        let variant_list = Environment.lookup tt (!variant_env) in
-       Undecidable (List.map (fun (tyid, _) -> SingleVariantPattern tyid) variant_list)
+       Undecidable (List.map ~f:(fun (tyid, _) -> SingleVariantPattern tyid) variant_list)
      | _ -> err ("cannot find type of single variant : " ^ tyid))
   | IdPattern _, VariantPattern(tyid, _) -> 
     let tysc_of_variant = Environment.lookup tyid tyenv in
     (match ty_of_tysc tysc_of_variant with
        TyFun(_, TyUser tt) -> 
        let variant_list = Environment.lookup tt (!variant_env) in
-       Undecidable (List.map (fun (tyid, _) -> VariantPattern (tyid, IdPattern "_")) variant_list)
+       Undecidable (List.map ~f:(fun (tyid, _) -> VariantPattern (tyid, IdPattern "_")) variant_list)
      | _ -> err ("cannot find type of variant : " ^ tyid))
+  | IdPattern _, RecordPattern (fl, is_u) ->  
+    let record_name = get_record_type_from_fields (List.map fl ~f:(fun (fname, _) -> fname)) is_u in
+    let record_specs = Environment.lookup record_name (!record_env) in
+    Undecidable [RecordPattern (List.map record_specs ~f:(fun (fname, _ ) -> (fname, IdPattern "_")), is_u)]
   | IdPattern _, TuplePattern _ -> Undecidable [TuplePattern(IdPattern "_", IdPattern "_")]
   | _, UnderbarPattern -> Match
   | _ -> NoMatch
 
 let pattern_same_var_check pattern_list = 
   let rec loop p accum = 
-    let open Core in
     match p with
     | ConsListPattern (p1, p2) | TuplePattern(p1, p2) -> 
       let _, p1_accum = loop p1 accum in
       loop p2 p1_accum
     | TailListPattern | SingleVariantPattern _ -> true, accum
     | VariantPattern (_, p1) -> loop p1 accum
+    | RecordPattern (l, _) -> 
+      let accum_all = List.fold l 
+          ~init:accum 
+          ~f:(fun accum (fname, pt) -> let _, p_accum = loop pt accum in p_accum) in
+      (true, accum_all)
     | IdPattern i -> 
       not (MySet.exists i accum), MySet.insert i accum
     | UnderbarPattern -> true, accum
-  in List.iter (fun (pp, _) -> 
+  in List.iter ~f:(fun (pp, _) -> 
       try 
         let valid, _ = loop pp [] in assert valid
       with _ -> err "match variable must not be same") pattern_list
@@ -227,7 +271,7 @@ let rec ty_exp tyenv = function
   | Var (ID x) | Var (VARIANT x) -> 
     (try
        let TyScheme(vars, ty) = Environment.lookup x tyenv in
-       let s = List.map (fun id -> (id, TyVar(fresh_tyvar ()))) vars in
+       let s = List.map ~f:(fun id -> (id, TyVar(fresh_tyvar ()))) vars in
        (tysc_of_ty(subst_type s ty), [])
      with Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit _ -> (tysc_of_ty(TyInt), [])
@@ -307,7 +351,7 @@ let rec ty_exp tyenv = function
            | TyVar tv -> loop rest (tv::accum)
            | _ -> loop rest accum)
         | [] -> accum in
-      loop (List.map (fun i -> ty_of_tysc(Environment.lookup i eval_tyenv)) param_ids) [] in
+      loop (List.map ~f:(fun i -> ty_of_tysc(Environment.lookup i eval_tyenv)) param_ids) [] in
     (* make output ( re-evaluate args ) *)
     let rec eval_type p e =
       (match p with
@@ -371,6 +415,21 @@ let rec ty_exp tyenv = function
          | TyFun(pt_tyconstructor, TyUser pt_tyname) -> 
            extend_pattern_env ipt pt_tyconstructor accum_tyenv accum_eqls
          | _ -> err "error in match")
+      | RecordPattern (l, _), TyUser ty_id -> 
+        let ty_specs = Environment.lookup ty_id !record_env in
+        List.fold l ~init:(accum_tyenv, accum_eqls)
+          ~f:(fun (accum_env, accum_eqls) (id, ipt) -> 
+              let correct_ty = List.Assoc.find_exn ty_specs id ~equal:(=) in
+              extend_pattern_env ipt correct_ty accum_env accum_eqls)
+      | RecordPattern (l, _), TyVar tid -> 
+        let tyname = get_record_type_from_fields (List.map ~f:(fun (fname, _) -> fname) l) true in
+        let ty_specs = Environment.lookup tyname !record_env in
+        let tyenv', accum_eqls' =  List.fold l ~init:(accum_tyenv, accum_eqls)
+            ~f:(fun (accum_tyenv, accum_eqls) (fieldname, ipt) -> 
+                let correct_ty = List.Assoc.find_exn ty_specs fieldname ~equal:(=) in
+                let tyenv_inner, eqls_inner =  extend_pattern_env ipt correct_ty accum_tyenv accum_eqls in
+                (tyenv_inner, eqls_inner)) in
+        tyenv', (TyUser tyname, TyVar tid):: accum_eqls'
       | IdPattern id, (_ as tt) -> 
         if id = "_" then accum_tyenv, accum_eqls
         else
@@ -426,7 +485,7 @@ let rec ty_exp tyenv = function
          (list_ty, ty_of_tysc hdtysc) ::accum
        | hd:: tl -> 
          let hdtysc, _ = ty_exp tyenv hd in
-         let tltysc, _ = ty_exp tyenv (List.hd tl) in
+         let tltysc, _ = ty_exp tyenv (List.hd_exn tl) in
          generate_lsteqls tl ((ty_of_tysc hdtysc, ty_of_tysc tltysc):: accum)
        | [] -> accum
       ) in
@@ -439,6 +498,28 @@ let rec ty_exp tyenv = function
     let main_subst = unify (eqls_of_subst ty_subst1 @ eqls_of_subst ty_subst2) in
     let main_ty = TyTuple(subst_type main_subst (ty_of_tysc tysc1),subst_type main_subst (ty_of_tysc tysc2)) in
     (tysc_of_ty main_ty, [])
+  | RecordExp fl -> 
+    let record_type_name = List.Assoc.find_exn (Environment.reverse !record_env)
+        ~equal:(fun l1 l2 -> List.for_all l1 ~f:(fun (x, _) -> List.exists l2 ~f:(fun (y, _) -> y = x)))
+        (List.map ~f:(fun (fname, _) -> (fname, TyDummy)) fl) in
+    let record_type_specs = Environment.lookup record_type_name (!record_env) in
+    let rec loop accum_equals = function
+      | (fname, fcontent):: rest ->
+        let local_tysc, local_subst = ty_exp tyenv fcontent in
+        let correct_type = List.Assoc.find_exn record_type_specs ~equal:(=) fname in
+        loop ((ty_of_tysc local_tysc, correct_type) :: accum_equals) rest
+      | [] -> accum_equals in
+    let main_eqls = loop [] fl in
+    let main_subst = unify main_eqls in
+    (tysc_of_ty (TyUser record_type_name), main_subst)
+  | RecordAppExp(e1, fieldname) ->
+    let e1_tysc, e1_subst = ty_exp tyenv e1 in
+    (* search recnames with fieldname in it *)
+    let (_, rec_name) = List.find_exn (Environment.reverse !record_env) 
+        ~f:(fun (fl, _) -> List.exists fl ~f:(fun (fname, ftype) -> fname = fieldname)) in
+    let field_type = List.Assoc.find_exn (Environment.lookup rec_name !record_env) ~equal:(=) fieldname in
+    let main_subst = unify ((ty_of_tysc e1_tysc, TyUser rec_name):: (eqls_of_subst e1_subst)) in
+    (tysc_of_ty field_type, main_subst)
   | _ -> err "ty_exp: not implemented"
 
 let rec ty_decl (tyenv: tyenv) = function
@@ -471,3 +552,7 @@ let rec ty_decl (tyenv: tyenv) = function
     variant_env := Environment.extend type_name variant_list !variant_env;
     let new_tyenv = append_tyenv variant_list tyenv in
     (tysc_of_ty TyDummy, new_tyenv)
+  | RecordDecl (recname, fcontentslist) -> 
+    (* make environment to remember record types *)
+    record_env := Environment.extend recname fcontentslist (!record_env);
+    (tysc_of_ty TyDummy, tyenv)

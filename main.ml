@@ -13,11 +13,13 @@ let rec load_prog_list env tyenv l =
   | phrase :: rest -> 
     (try
        let decl = Parser.toplevel Lexer.main (Lexing.from_string (phrase ^ ";;")) in
-       let ty, new_tyenv = ty_decl tyenv decl  in
+       let tysc, new_tyenv = ty_decl tyenv decl  in
        let (id, newenv, v) = eval_decl env decl in
-       Printf.printf "val %s : " id;
-       print_string (string_of_ty (renumber_ty (ty_of_tysc ty)));
-       print_string " = ";
+       if not (ty_of_tysc tysc = TyDummy) then
+         (Printf.printf "val %s : " id;
+          print_string (string_of_ty (renumber_ty (ty_of_tysc tysc)));
+          print_string " = ")
+       else ();
        pp_val v;
        print_newline();
        load_prog_list newenv new_tyenv rest
@@ -34,9 +36,11 @@ let rec read_eval_print env tyenv =
     let decl = Parser.toplevel Lexer.main (Lexing.from_channel stdin) in
     let tysc, new_tyenv = ty_decl tyenv decl in
     let (id, newenv, v) = eval_decl env decl in
-    Printf.printf "val %s : " id;
-    print_string (string_of_ty (renumber_ty (ty_of_tysc tysc)));
-    print_string " = ";
+    if not (ty_of_tysc tysc = TyDummy) then 
+      (Printf.printf "val %s : " id;
+       print_string (string_of_ty (renumber_ty (ty_of_tysc tysc)));
+       print_string " = ")
+    else ();
     pp_val v;
     print_newline();
     read_eval_print newenv new_tyenv

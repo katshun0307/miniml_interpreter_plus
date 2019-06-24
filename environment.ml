@@ -14,5 +14,8 @@ let rec map f = function
 
 let rec fold_right f env a = 
   match env with
-      [] -> a
-    | (_, v)::rest -> f v (fold_right f rest a)
+    [] -> a
+  | (_, v)::rest -> f v (fold_right f rest a)
+
+let rec reverse x = 
+  List.map (fun (a, b) -> (b, a)) x

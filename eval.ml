@@ -17,8 +17,11 @@ type exval =
   | ListV of exval list
   | TupleV of exval * exval
   | UserV of tyid
+  | UserDefV of id * ((id * ty) list)
   | ArityUserV of tyid
   | ArityAppUserV of tyid * exval
+  | RecordV of id * ((id * exval) list)
+  | RecordDefV of id * ((id * ty) list)
 and dnval = exval
 
 exception Error of string
@@ -38,6 +41,16 @@ let rec string_of_exval = function
   | UserV tyid -> tyid
   | ArityUserV tyid -> tyid
   | ArityAppUserV (tyid, v) -> tyid ^ " of " ^ (string_of_exval v)
+  | RecordV (recname, contentlist) -> 
+    "{" ^ Core.String.concat ~sep:"; " (List.map ~f:(fun (fname, fcontent) -> fname ^ "=" ^ (string_of_exval fcontent)) contentlist ) ^ "}"
+  | RecordDefV (recname, fl) ->
+    "type " ^ recname ^ " = {" ^ 
+    (String.concat ~sep:"; " (List.map ~f:(fun (fname, fty) -> fname ^ " : " ^ (string_of_ty fty)) fl))
+    ^ "}"
+  | UserDefV(tyname, variant_list) -> 
+    "type " ^ tyname ^ " = " ^ 
+    String.concat ~sep:"| " 
+      (List.map variant_list ~f:(fun (variant_id, content_ty) -> variant_id ^ " of " ^ (string_of_ty content_ty)))  
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -68,15 +81,15 @@ let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
   | Modulo, _, _ -> err ("Both arguments must be integer: %")
   | Eq, _, _ -> BoolV (check_equals (arg1, arg2))
   | FPlus, FloatV i1, FloatV i2 -> FloatV (i1 +. i2)
-  | FPlus, _, _ -> err ("Both arguments must be integer: +")
+  | FPlus, _, _ -> err ("Both arguments must be integer: +.")
   | FMinus, FloatV i1, FloatV i2 -> FloatV (i1 -. i2)
-  | FMinus, _, _ -> err ("Both arguments must be integer: -")
+  | FMinus, _, _ -> err ("Both arguments must be integer: -.")
   | FMult, FloatV i1, FloatV i2 -> FloatV (i1 *. i2)
-  | FMult, _, _ -> err ("Both arguments must be integer: *")
+  | FMult, _, _ -> err ("Both arguments must be integer: *.")
   | FDiv, FloatV i1, FloatV i2 -> FloatV (i1 /. i2)
-  | FDiv, _, _ -> err ("Both arguments must be integer: /")
+  | FDiv, _, _ -> err ("Both arguments must be integer: /.")
   | FLt, FloatV i1, FloatV i2 -> BoolV (i1 <. i2)
-  | FLt, _, _ -> err ("Both arguments must be integer: <")
+  | FLt, _, _ -> err ("Both arguments must be integer: <.")
 
 let rec find l n = 
   match l with 
@@ -180,15 +193,7 @@ let rec eval_exp env = function
     eval_exp newenv exp2
   | ListExp exp_list -> 
     ListV (List.map exp_list ~f:(fun e -> eval_exp env e))
-  | MatchExp(guard_exp, pattern_list) -> 
-    (* let rec make_env list_pattern current_case accum_env =
-       match list_pattern, current_case with
-       | Cons(hd_id, rest_pattern), hd::tl -> 
-        make_env rest_pattern tl (Environment.extend hd_id hd accum_env)
-       | Id id, _ -> 
-        Environment.extend id (ListV current_case) accum_env
-       | Tail, [] -> accum_env
-       | _ -> raise MatchFail in *)
+  | MatchExp(guard_exp, pattern_list) ->
     let guard_val = eval_exp env guard_exp in
     let rec make_pattern_env pt (ex:dnval) (accum_env: dnval Environment.t) =
       (* recursive function to make env with pattern vars in env *)
@@ -206,6 +211,10 @@ let rec eval_exp env = function
         if pt_tyid = v_tyid then 
           make_pattern_env ipt varval accum_env
         else raise MatchFail
+      | RecordPattern (fl, _), RecordV(tyname, content_list) -> 
+        List.fold fl ~init:accum_env
+          ~f:(fun accum_env (fname, ipt) -> 
+              make_pattern_env ipt (List.Assoc.find_exn content_list ~equal:(=) fname) accum_env)
       | IdPattern id, _ -> 
         if id = "_" then accum_env
         else Environment.extend id ex accum_env
@@ -222,34 +231,15 @@ let rec eval_exp env = function
            loop_pattern rest)
       | [] -> err "match failed" in
     loop_pattern pattern_list
-  (* (match guard_val with
-     (* guard_val is list *)
-     | ListV content_list ->
-     let rec loop_pattern current_pattern_list = 
-       match current_pattern_list with
-       | (ListPattern p, e):: rest ->
-         (try
-            let eval_env = make_env p content_list env in
-            eval_exp eval_env e
-          with MatchFail ->
-            loop_pattern rest)
-       | (_, _):: _ -> raise (Error "does not match any case") 
-       | [] -> raise (Error "does not match any case") in
-     loop_pattern pattern_list 
-     (* guard_val is tuple *)
-     | TupleV (ListV content_list1, ListV content_list2) -> 
-     let rec loop_pattern current_pattern_list  = 
-       match current_pattern_list with
-       | (TuplePattern (p1, p2), e)::rest ->
-         (try
-            let env_p1 = make_env p1 content_list1 env in
-            let env_p2 = make_env p2 content_list2 env_p1 in
-            eval_exp env_p2 e
-          with MatchFail -> loop_pattern rest)
-       | _ -> raise (Error "does not match any case") in
-     loop_pattern pattern_list
-     | _ -> raise (Error "match expression must be applied to list")) *)
   | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
+  | RecordExp fieldlist -> 
+    RecordV("hoge(rectype comes here)", List.map fieldlist ~f:(fun (fname, fcontent) -> (fname, eval_exp env fcontent)))
+  | RecordAppExp(e1, fieldname) -> 
+    let e1val = eval_exp env e1 in
+    match e1val with
+    | RecordV(recname, fl) -> 
+      List.Assoc.find_exn fl fieldname ~equal:(=)
+    | _ -> err ("no field with type " ^ fieldname)
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
@@ -270,6 +260,7 @@ let eval_decl env = function
         extend_env t accum_env'
       | [] -> accum_env in
     let env' = extend_env variant_list env in
-    (ty_name, env', ListV (List.map variant_list ~f:(fun (x, _) -> UserV x)))
+    (* (ty_name, env', ListV (List.map variant_list ~f:(fun (x, _) -> UserV x))) *)
+    (ty_name, env', UserDefV(ty_name, variant_list))
   | RecordDecl (recname, fieldslist) -> 
-    err "not implemented"
+    (recname, env, RecordDefV(recname, fieldslist))

@@ -336,6 +336,52 @@ let user_type_tests = "user type tests" >::: [
                             );
   ]
 
+let record_tests = "record tests" >::: [
+    "basic decl0" >:: (fun _ -> assert_equal_content
+                          {ty = TyUser "person"; v = None}
+                          (test_eval_loop ["type person = { age: int; alive: bool}"; 
+                                           "let a = { age = 40; alive = true}";
+                                           "a"])
+                      );
+    "basic decl1" >:: (fun _ -> assert_equal_content
+                          {ty = TyBool; v = Some (BoolV true)}
+                          (test_eval_loop ["type person = { age: int; alive: bool}"; 
+                                           "let a = { age = 40; alive = true}";
+                                           "a.alive"])
+                      );
+    "basic decl2" >:: (fun _ -> assert_equal_content
+                          {ty = TyInt; v = Some (IntV 40)}
+                          (test_eval_loop ["type person = { age: int; alive: bool}"; 
+                                           "let a = { age = 40; alive = true}";
+                                           "a.age"])
+                      );
+    "record match0" >:: (fun _ -> assert_equal_content
+                            {ty = TyFun(TyUser "person", TyInt); v = None}
+                            (test_eval_loop ["type person = { age: int; alive: bool}"; 
+                                             "let f x = match x with | {age = a; alive = b} -> a"])
+                        );
+    "record match1" >:: (fun _ -> assert_equal_content
+                            {ty = TyInt; v = Some (IntV 40)}
+                            (test_eval_loop ["type person = { age: int; alive: bool}"; 
+                                             "let f x = match x with | {age = a; alive = b} -> a";
+                                             "let a = { age = 40; alive = true}";
+                                             "f a"])
+                        );
+    "record match exhaustivity error0" >:: (fun _ -> assert_raises
+                                               match_exhaustive_error
+                                               (fun _ -> test_eval_loop ["type person = { age: int; alive: bool}";
+                                                                         "let x = {age = 3; alive = false}";
+                                                                         "match x with | {age = a;} -> a"])
+                                           );
+    "record match exhaustivity error1" >:: (fun _ -> assert_raises
+                                               match_exhaustive_error
+                                               (fun _ -> test_eval_loop ["type person = { age: int list; alive: bool}";
+                                                                         "let x = {age = [4;5]; alive = true}";
+                                                                         "match x with | {age = a :: c :: []; alive = b} -> 3 | {age = []; alive = b } -> 50"])
+                                           );
+  ]
+
+
 let tests = "all tests" >::: [
     binop_tests;
     float_binop_tests;
@@ -345,6 +391,7 @@ let tests = "all tests" >::: [
     match_tests;
     polylet_tests;
     user_type_tests;
+    record_tests;
     advanced_match_tests;
     advanced_tests;
   ]

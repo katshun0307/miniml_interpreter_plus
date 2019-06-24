@@ -51,6 +51,7 @@ type match_pattern =
   | TuplePattern of match_pattern * match_pattern
   | SingleVariantPattern of tyid 
   | VariantPattern of tyid * match_pattern
+  | RecordPattern of (id * match_pattern) list * bool (* when bool is true, there is underbar *)
   | IdPattern of id
   | UnderbarPattern
 
@@ -78,6 +79,7 @@ type exp =
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
   | RecordExp of (id * exp) list (* (fieldname * exp) list *)
+  | RecordAppExp of exp * id (* exp of record and id of fieldname *)
 
 type program =
     Exp of exp
@@ -141,7 +143,7 @@ let rec string_of_ty = function
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
   | TyUser id ->
     "@" ^ id
-  | TyDummy -> "@@@"
+  | TyDummy -> "TyDummy"
 
 let string_of_eqls eqls =
   let open Core in
@@ -160,6 +162,9 @@ let rec string_of_pattern p =
   | SingleVariantPattern tyid -> "Variant(" ^ tyid ^ ")"
   | VariantPattern (tyid, pin) -> 
     sprintf "%s(%s)" tyid (string_of_pattern pin)
+  | RecordPattern (l, _) -> 
+    String.concat ~sep:"; " 
+      (List.map l ~f:(fun (fname, p) -> sprintf "%s = %s" fname (string_of_pattern p)))
   | IdPattern i -> i
   | UnderbarPattern -> "__"
 

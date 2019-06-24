@@ -13,6 +13,9 @@ lexer.ml: lexer.mll
 parser.ml: parser.mly
 	menhir parser.mly
 
+test: default
+	./miniml -test
+
 clean: 
 	rm lexer.cmi lexer.cmx lexer.ml lexer.o
 	rm parser.ml parser.mli parser.o parser.conflicts parser.automaton

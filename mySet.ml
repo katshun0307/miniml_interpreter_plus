@@ -35,3 +35,5 @@ let rec bigunion = function
     [] -> []
   | set1 :: rest -> union set1 (bigunion rest)
 
+let rec equals s t = 
+  diff s t = [] && diff t s = []

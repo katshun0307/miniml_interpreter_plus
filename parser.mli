@@ -43,10 +43,12 @@ type token =
   | FLT
   | FLOAT_OF_INT
   | FLOATV of (float)
+  | FLOAT
   | FDIVIDE
   | FALSE
   | EQ
   | ELSE
+  | DOT
   | DIVIDE
   | DFUN
   | CONS
