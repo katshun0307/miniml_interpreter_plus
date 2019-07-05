@@ -23,6 +23,14 @@ let reservedWords = [
   ("float_of_int", Parser.FLOAT_OF_INT);
   ("int_of_float", Parser.INT_OF_FLOAT);
 ] 
+
+
+(* | "'" ['a'-'z'] ['a'-'z']* ['0'-'9']* 
+    { let id = Lexing.lexeme lexbuf in
+      Parser.TYVARANNOT id
+    } 
+    *)
+
 }
 
 rule main = parse
@@ -66,6 +74,10 @@ rule main = parse
 | "_" { Parser.UNDERBAR }
 | ":" { Parser.COLON }
 | "." { Parser.DOT }
+| "'" ['a'-'z'] ['a'-'z']* ['0'-'9']* 
+    { let id = Lexing.lexeme lexbuf in
+      Parser.TYVARANNOT id
+    } 
 | ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
     { let id = Lexing.lexeme lexbuf in
       try 

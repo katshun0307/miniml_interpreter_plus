@@ -4,6 +4,7 @@
 type token = 
   | WITH
   | UNDERBAR
+  | TYVARANNOT of (Syntax.tyvar_annot)
   | TYPE
   | TYID of (Syntax.tyid)
   | TRUE

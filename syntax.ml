@@ -1,14 +1,26 @@
 open MySet
+open Core
 
 exception Error of string
 
 let err s = raise (Error s)
 
 (* ML interpreter / type reconstruction *)
+
 type id = string
+[@@deriving show]
+
+(* name of variant, starting with capital letters *)
 type tyid = string
+[@@deriving show]
 
 type tyvar = int
+[@@deriving show]
+
+(* type variable annotations by user *)
+(* ex. 'a *)
+type tyvar_annot = string 
+[@@deriving show]
 
 type ty = 
   | TyInt 
@@ -20,12 +32,15 @@ type ty =
   | TyTuple of ty * ty
   | TyUser of id
   | TyDummy (* return type of type declaration *)
+[@@deriving show]
 
 type annot_id = string * ty option
+[@@deriving show]
 
 type vars = 
   | ID of annot_id 
   | VARIANT of string
+[@@deriving show]
 
 type binOp = 
   | Plus 
@@ -40,13 +55,16 @@ type binOp =
   | FMult 
   | FDiv 
   | FLt
+[@@deriving show]
 
 type logicOp = And | Or 
+[@@deriving show]
 
 type list_pattern = 
   | Tail 
   | Id of id
   | Cons of id * list_pattern
+[@@deriving show]
 
 type match_pattern = 
   | ConsListPattern of match_pattern * match_pattern
@@ -57,6 +75,7 @@ type match_pattern =
   | RecordPattern of (id * match_pattern) list * bool (* when bool is true, there is underbar *)
   | IdPattern of id
   | UnderbarPattern
+[@@deriving show]
 
 type exp =
   | Var of vars (* Var "x" --> x *)
@@ -83,13 +102,15 @@ type exp =
   | TupleExp of exp * exp (* tuple expression *)
   | RecordExp of (id * exp) list (* (fieldname * exp) list *)
   | RecordAppExp of exp * id (* exp of record and id of fieldname *)
+[@@deriving show]
 
 type program =
-    Exp of exp
+  | Exp of exp
   | Decl of annot_id * exp
   | RecDecl of id * id * exp
-  | TypeDecl of id * ((tyid * ty) list)
-  | RecordDecl of id * ((id * ty) list)
+  | TypeDecl of id * (tyid * ty) list
+  | RecordDecl of id * (id * ty) list
+[@@deriving show]
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty
@@ -100,10 +121,10 @@ let ty_of_tysc (TyScheme(_, ty)) = ty
 
 let tyvar_string_of_int n =
   (* 26 * block + offset *)
-  let start_code = Char.code 'a' in
+  let start_code = Char.to_int 'a' in
   let alphabet_of_int n = 
     (if n <= 26 then
-       Char.escaped (Char.chr (n + start_code))
+       Char.escaped (Char.of_int_exn (n + start_code))
      else err "unexpected input") in
   let offset = n mod 26 in
   let block = (n - offset) / 26 in
@@ -179,7 +200,7 @@ let rec string_of_list_pattern (lp: list_pattern) =
 
 let string_of_tysc = function
   | TyScheme(bl, ty) -> 
-    let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map (fun b -> tyvar_string_of_int b) bl) ^ "]" in
+    let bound_vars = "[" ^ Core.String.concat ~sep:"," (List.map ~f:(fun b -> tyvar_string_of_int b) bl) ^ "]" in
     bound_vars ^ string_of_ty ty
 
 let renumber_ty t = 
@@ -215,6 +236,19 @@ let fresh_tyvar =
   let body () =
     let v = !counter in
     counter := v + 1; v
+  in body
+
+(* returns tyvar for type annotation *)
+let fresh_tyvar_annot = 
+  let counter = ref (-1) in
+  let assoc = ref [] in
+  let body (s: string) = 
+    match List.Assoc.find !assoc ~equal:(=) s with
+    | Some x -> x
+    | None -> 
+      let v = !counter in
+      counter := v + 1;
+      assoc := (s, v)::!assoc; v
   in body
 
 (* 与えられた型中の型変数の集合を返す関数 *)

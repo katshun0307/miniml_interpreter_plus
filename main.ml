@@ -13,7 +13,7 @@ let rec load_prog_list env tyenv l =
   | phrase :: rest -> 
     (try
        let decl = Parser.toplevel Lexer.main (Lexing.from_string (phrase ^ ";;")) in
-       let tysc, new_tyenv = ty_decl tyenv decl  in
+       let tysc, new_tyenv = ty_decl tyenv decl in
        let (id, newenv, v) = eval_decl env decl in
        if not (ty_of_tysc tysc = TyDummy) then
          (Printf.printf "val %s : " id;
@@ -34,6 +34,7 @@ let rec read_eval_print env tyenv =
   flush stdout;
   try
     let decl = Parser.toplevel Lexer.main (Lexing.from_channel stdin) in
+    print_string (show_program decl);
     let tysc, new_tyenv = ty_decl tyenv decl in
     let (id, newenv, v) = eval_decl env decl in
     if not (ty_of_tysc tysc = TyDummy) then 

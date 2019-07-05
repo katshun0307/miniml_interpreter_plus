@@ -16,6 +16,7 @@ open Syntax
 %token <float> FLOATV
 %token <Syntax.id> ID
 %token <Syntax.tyid> TYID
+%token <Syntax.tyvar_annot> TYVARANNOT
 
 %start toplevel
 %type <Syntax.program> toplevel
@@ -36,6 +37,7 @@ TypeExpr :
   | BOOL { TyBool }
   | FLOAT { TyFloat }
   | i=ID { TyUser i }
+  /* | s=TYVARANNOT { TyVar(fresh_tyvar_annot s) } */
   | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
   | lty=TypeExpr LIST { TyList lty }
   | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
