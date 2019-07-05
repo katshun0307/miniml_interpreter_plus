@@ -23,8 +23,9 @@ open Syntax
 
 toplevel :
   | e=Expr SEMISEMI { Exp e }
-  | LET x=ID EQ e=Expr SEMISEMI { Decl(x, e) }
-  | LET f=ID b=LETFUNExpr { Decl(f, b) } (* declaration *)
+  | LET x=ID EQ e=Expr SEMISEMI { Decl((x, None), e) }
+  | LET LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr SEMISEMI { Decl((x, Some ty), e) }
+  | LET f=ID b=LETFUNExpr { Decl((f, None), b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
   | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
@@ -45,8 +46,8 @@ LETFUNExpr :
   | para=LETFUNPARAExpr e=Expr SEMISEMI { FunExp(para, e) }
 
 LETFUNPARAExpr :
-  | x=ID l=LETFUNPARAExpr { x :: l }
-  | x=ID EQ { x :: [] }
+  | x=AnnotIdExpr l=LETFUNPARAExpr { x :: l }
+  | x=AnnotIdExpr EQ { x :: [] }
 
 (* type declarations *)
 TYDECLSExpr : 
@@ -139,18 +140,18 @@ TupleExpr :
 LETExpr :
   | LET e1=MULTILETExpr IN e2=Expr { MultiLetExp(e1, e2) } (* simple value declarations *)
 
+MULTILETExpr : 
+  | x=ID EQ e=Expr LETAND l=MULTILETExpr { ((x, None), e) :: l }
+  | x=ID EQ e=Expr { ((x, None), e) :: [] }
+  | LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr LETAND l=MULTILETExpr { ((x, Some ty), e) :: l }
+  | LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr { ((x, Some ty), e) :: [] }
+  | f=ID params=LETFUNPARAExpr e=Expr LETAND l=MULTILETExpr { ((f, None), FunExp(params, e)) :: l }
+  | f=ID params=LETFUNPARAExpr e=Expr { ((f, None), FunExp(params, e)) :: [] }
+
+(* let rec expression *)
 LETRECExpr : 
   | LET REC f=ID EQ FUN para=ID RARROW e1=Expr IN e2=Expr { LetRecExp(f, para, e1, e2) }
   | LET REC f=ID para=ID EQ e1=Expr IN e2=Expr { LetRecExp(f, para, e1 ,e2) }
-
-(* multiple declarations for let expression *)
-MULTILETExpr : 
-  /* | x=ID EQ e=Expr LETAND l=MULTILETExpr { (x, e) :: l } */
-  /* | x=ID EQ e=Expr { (x, e) :: [] } */
-  | x=ID EQ e=Expr LETAND l=MULTILETExpr { (x, e) :: l }
-  | f=ID params=LETFUNPARAExpr e=Expr LETAND l=MULTILETExpr { (f, FunExp(params, e)) :: l }
-  | x=ID EQ e=Expr { (x, e) :: [] }
-  | f=ID params=LETFUNPARAExpr e=Expr { (f, FunExp(params, e)) :: [] }
 
 /* LETEXPDECLExpr : (* <f x y x = x + y * z> / <x = 2> *)
   | x=ID EQ e=Expr { (x, e) } (* for simple declarations *)
@@ -207,8 +208,8 @@ FUNExpr : (* store ids as list *)
   | FUN params=FUNPARAExpr e=Expr { FunExp(params, e) }
 
 FUNPARAExpr : 
-  | x=ID l=FUNPARAExpr { x :: l }
-  | x=ID RARROW { x :: [] }
+  | x=AnnotIdExpr l=FUNPARAExpr { x :: l }
+  | x=AnnotIdExpr RARROW { x :: [] }
 
 (* dynamic function expression *)
 DFUNExpr : (* dfun x1 ... -> expr *)
@@ -219,20 +220,20 @@ DFunBottomultExpr : (* ....xn-1 xn -> expr *)
   | x=ID b=DFunBottomultExpr { DFunExp (x, b) }
 
 BinExpr : (* binary expression *)
-  |  LPAREN EQ RPAREN      { FunExp(["a" ; "b"], BinOp   (Eq,      Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN PLUS RPAREN    { FunExp(["a" ; "b"], BinOp   (Plus,    Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MINUS RPAREN   { FunExp(["a" ; "b"], BinOp   (Minus,   Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MULT RPAREN    { FunExp(["a" ; "b"], BinOp   (Mult,    Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN DIVIDE RPAREN  { FunExp(["a" ; "b"], BinOp   (Div,     Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN MODULO RPAREN  { FunExp(["a" ; "b"], BinOp   (Modulo,  Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN LT RPAREN      { FunExp(["a" ; "b"], BinOp   (Lt,      Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN AND RPAREN     { FunExp(["a" ; "b"], LogicOp (And,     Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN OR RPAREN      { FunExp(["a" ; "b"], LogicOp (Or,      Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN FPLUS RPAREN   { FunExp(["a" ; "b"], BinOp   (FPlus,   Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN FMINUS RPAREN  { FunExp(["a" ; "b"], BinOp   (FMinus,  Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN FMULT RPAREN   { FunExp(["a" ; "b"], BinOp   (FMult,   Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN FDIVIDE RPAREN { FunExp(["a" ; "b"], BinOp   (FDiv,    Var (ID "a"), Var (ID "b"))) }
-  |  LPAREN FLT RPAREN     { FunExp(["a" ; "b"], BinOp   (FLt,     Var (ID "a"), Var (ID "b"))) }
+  |  LPAREN EQ RPAREN      { FunExp([("a", None) ; ("b", None)], BinOp   (Eq,      Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN PLUS RPAREN    { FunExp([("a", None) ; ("b", None)], BinOp   (Plus,    Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN MINUS RPAREN   { FunExp([("a", None) ; ("b", None)], BinOp   (Minus,   Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN MULT RPAREN    { FunExp([("a", None) ; ("b", None)], BinOp   (Mult,    Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN DIVIDE RPAREN  { FunExp([("a", None) ; ("b", None)], BinOp   (Div,     Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN MODULO RPAREN  { FunExp([("a", None) ; ("b", None)], BinOp   (Modulo,  Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN LT RPAREN      { FunExp([("a", None) ; ("b", None)], BinOp   (Lt,      Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN AND RPAREN     { FunExp([("a", None) ; ("b", None)], LogicOp (And,     Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN OR RPAREN      { FunExp([("a", None) ; ("b", None)], LogicOp (Or,      Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN FPLUS RPAREN   { FunExp([("a", None) ; ("b", None)], BinOp   (FPlus,   Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN FMINUS RPAREN  { FunExp([("a", None) ; ("b", None)], BinOp   (FMinus,  Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN FMULT RPAREN   { FunExp([("a", None) ; ("b", None)], BinOp   (FMult,   Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN FDIVIDE RPAREN { FunExp([("a", None) ; ("b", None)], BinOp   (FDiv,    Var (ID ("a", None)), Var (ID ("b", None)))) }
+  |  LPAREN FLT RPAREN     { FunExp([("a", None) ; ("b", None)], BinOp   (FLt,     Var (ID ("a", None)), Var (ID ("b", None)))) }
 
 (* most basic expressions *)
 AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
@@ -241,6 +242,11 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
-  | i=ID   { Var (ID i) }
   | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }
+  | e=AnnotIdExpr { Var(ID e) } (* includes non annotated ids *)
+
+AnnotIdExpr : 
+  | i=ID { (i, None) }
+  | LPAREN i=ID COLON ty=TypeExpr RPAREN { (i, Some ty) }
+  | LPAREN e=AnnotIdExpr RPAREN { e }

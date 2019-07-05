@@ -381,6 +381,21 @@ let record_tests = "record tests" >::: [
                                            );
   ]
 
+let type_hint_tests = "type hint" >::: [
+    "decl" >:: (fun _ -> assert_equal_content
+                   {ty = TyInt; v = Some (IntV 3)}
+                   (test_eval_loop ["let (x:int) = 3"])
+               );
+    "letexp0" >:: (fun _ -> assert_equal_content
+                      {ty = TyInt; v = Some (IntV 3)}
+                      (test_eval_loop ["let (x:int) = 3 in x"])
+                  );
+    "letexp1" >:: (fun _ -> assert_equal_content
+                      {ty = TyInt; v = Some (IntV 3)}
+                      (test_eval_loop ["let x = 3 in (x:int)"])
+                  );
+  ] 
+
 
 let tests = "all tests" >::: [
     binop_tests;
@@ -394,6 +409,7 @@ let tests = "all tests" >::: [
     record_tests;
     advanced_match_tests;
     advanced_tests;
+    type_hint_tests;
   ]
 
 let run_test () = 

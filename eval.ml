@@ -12,7 +12,7 @@ type exval =
   | BoolV of bool
   | FloatV of float
   | ProcV of id * exp * dnval Environment.t ref
-  | ListProcV of id list * exp * dnval Environment.t ref
+  | ListProcV of annot_id list * exp * dnval Environment.t ref
   | DProcV of id * exp
   | ListV of exval list
   | TupleV of exval * exval
@@ -104,7 +104,7 @@ let multiple_decls_sanity lst =
   in loop lst []
 
 let rec eval_exp env = function
-    Var (ID x)  -> 
+    Var (ID (x, _))  -> 
     (try Environment.lookup x env with 
        Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | Var (VARIANT x) -> (try Environment.lookup x env with 
@@ -152,7 +152,7 @@ let rec eval_exp env = function
     if multiple_decls_sanity decls then
       let rec make_env current_env d = 
         (match d with
-         | top :: rest -> let (id, e) = top in 
+         | ((id, _), e) :: rest ->  
            let v = eval_exp env e in
            let update_env = Environment.extend id v current_env in
            make_env update_env rest
@@ -172,9 +172,9 @@ let rec eval_exp env = function
        (* non-recursive function *)
        | ListProcV (params, body, env_ref) -> (* non-recursive function *)
          (match params with
-          | top :: [] -> let newenv = Environment.extend top arg !env_ref in
+          | (top, _) :: [] -> let newenv = Environment.extend top arg !env_ref in
             eval_exp newenv body
-          | top :: rest -> 
+          | (top, _) :: rest -> 
             let newenv = Environment.extend top arg !env_ref in
             let dummyenv = ref Environment.empty in
             dummyenv := newenv;
@@ -243,7 +243,7 @@ let rec eval_exp env = function
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
-  | Decl (id, e) -> let v = eval_exp env e in (id, Environment.extend id v env, v)
+  | Decl ((id, _), e) -> let v = eval_exp env e in (id, Environment.extend id v env, v)
   | RecDecl(id, para, e) -> (
       let dummyenv = ref Environment.empty in 
       let newenv = Environment.extend id (ProcV(para, e, dummyenv)) env in 

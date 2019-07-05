@@ -8,8 +8,23 @@ let err s = raise (Error s)
 type id = string
 type tyid = string
 
+type tyvar = int
+
+type ty = 
+  | TyInt 
+  | TyBool
+  | TyFloat
+  | TyVar of tyvar
+  | TyFun of ty * ty
+  | TyList of ty
+  | TyTuple of ty * ty
+  | TyUser of id
+  | TyDummy (* return type of type declaration *)
+
+type annot_id = string * ty option
+
 type vars = 
-  | ID of string
+  | ID of annot_id 
   | VARIANT of string
 
 type binOp = 
@@ -24,26 +39,14 @@ type binOp =
   | FMinus
   | FMult 
   | FDiv 
-  | FLt 
+  | FLt
+
 type logicOp = And | Or 
 
 type list_pattern = 
   | Tail 
   | Id of id
   | Cons of id * list_pattern
-
-type tyvar = int
-
-type ty = 
-  | TyInt 
-  | TyBool
-  | TyFloat
-  | TyVar of tyvar
-  | TyFun of ty * ty
-  | TyList of ty
-  | TyTuple of ty * ty
-  | TyUser of id
-  | TyDummy (* return type of type declaration *)
 
 type match_pattern = 
   | ConsListPattern of match_pattern * match_pattern
@@ -71,8 +74,8 @@ type exp =
            ILit 3, 
            Var "x") --> 
      if x<4 then 3 else x *)
-  | MultiLetExp of (id * exp) list * exp
-  | FunExp of id list * exp (* static function expression *)
+  | MultiLetExp of (annot_id * exp) list * exp
+  | FunExp of annot_id list * exp (* static function expression *)
   | DFunExp of id * exp (* dynamic function expression *)
   | AppExp of exp * exp (* function application expression *)
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
@@ -83,7 +86,7 @@ type exp =
 
 type program =
     Exp of exp
-  | Decl of id * exp
+  | Decl of annot_id * exp
   | RecDecl of id * id * exp
   | TypeDecl of id * ((tyid * ty) list)
   | RecordDecl of id * ((id * ty) list)
@@ -197,7 +200,9 @@ let renumber_ty t =
       let t1', assoc1 = loop t1 assoc in
       let t2', assoc2 = loop t2 (assoc1 @ assoc) in
       (TyFun(t1', t2'), assoc1 @ assoc2)
-    | TyList t1 -> loop t1 assoc
+    | TyList t1 -> 
+      let t', assoc' = loop t1 assoc in
+      (TyList t', assoc')
     | TyVar tv1 -> 
       let tv', assoc' =  renumber_tyvar tv1 assoc in
       (TyVar tv', assoc')
@@ -237,3 +242,7 @@ let freevar_tysc (TyScheme(b, ty)) =
       MySet.union (loop t1) (loop t2)
   in let freevar_set = loop ty in
   MySet.to_list freevar_set
+
+let id_of_annot_id (ian: annot_id): id = 
+  match ian with
+  | (i, _) -> i

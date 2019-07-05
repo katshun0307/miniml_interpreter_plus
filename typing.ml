@@ -268,7 +268,20 @@ let check_pattern_exhaustive tyenv pattern_list =
 (* <<< check if pattern matching is exhasutive <<< *)
 
 let rec ty_exp tyenv = function
-  | Var (ID x) | Var (VARIANT x) -> 
+  | Var (ID (x, Some ty_annot)) -> 
+    (try
+       let TyScheme(vars, ty) = Environment.lookup x tyenv in
+       let s = List.map ~f:(fun id -> (id, TyVar(fresh_tyvar ()))) vars in
+       let main_subst = unify ((ty_annot, ty):: eqls_of_subst s) in
+       (tysc_of_ty(subst_type main_subst ty), [])
+     with Environment.Not_bound -> err ("Variable not bound: " ^ x))
+  | Var (ID (x, None)) -> 
+    (try
+       let TyScheme(vars, ty) = Environment.lookup x tyenv in
+       let s = List.map ~f:(fun id -> (id, TyVar(fresh_tyvar ()))) vars in
+       (tysc_of_ty(subst_type s ty), [])
+     with Environment.Not_bound -> err ("Variable not bound: " ^ x))
+  | Var (VARIANT x) -> 
     (try
        let TyScheme(vars, ty) = Environment.lookup x tyenv in
        let s = List.map ~f:(fun id -> (id, TyVar(fresh_tyvar ()))) vars in
@@ -319,7 +332,14 @@ let rec ty_exp tyenv = function
          current_subst: accumulates substitutions produced when evaluating param types
          current_para_types : accumulates all the types of params for poly-let *)
       match p with
-      | (id, e) :: rest -> 
+      | ((id, Some ty_annot), e) :: rest -> 
+        let e_tysc, e_subst = ty_exp tyenv e in
+        let main_subst = unify ((ty_of_tysc e_tysc, ty_annot):: eqls_of_subst e_subst) in
+        let tysc' = closure (ty_of_tysc (e_tysc)) tyenv main_subst in
+        let new_tyenv = Environment.extend id tysc' current_tyenv in
+        let new_subst = current_subst @ e_subst in
+        extend_envs_from_list new_tyenv new_subst (e_tysc::current_para_types) rest
+      | ((id, None), e) :: rest -> 
         let e_tysc, e_subst = ty_exp tyenv e in
         let tysc' = closure (ty_of_tysc e_tysc) tyenv e_subst in
         let new_tyenv = Environment.extend id tysc' current_tyenv in
@@ -334,7 +354,10 @@ let rec ty_exp tyenv = function
     let rec extend_envs_from_list (current_env:tyenv) p =
       (* get environment with new tyvar for each params to evaluate the main function *)
       (match p with
-       | id :: rest ->
+       | (id, Some ty_annot) :: rest ->
+         let new_env = Environment.extend id (TyScheme([], ty_annot)) current_env in
+         extend_envs_from_list new_env rest
+       | (id, None) :: rest ->
          let new_tyvar = fresh_tyvar() in
          let new_env = Environment.extend id (TyScheme([], TyVar new_tyvar)) current_env in
          extend_envs_from_list new_env rest
@@ -355,7 +378,7 @@ let rec ty_exp tyenv = function
     (* make output ( re-evaluate args ) *)
     let rec eval_type p e =
       (match p with
-       | top :: rest ->
+       | (top, _) :: rest ->
          (try
             let arg_tyvar = Environment.lookup top eval_tyenv in
             let arg_ty = subst_type res_tysubst (ty_of_tysc arg_tyvar) in
@@ -363,7 +386,7 @@ let rec ty_exp tyenv = function
           with _ -> err "error in fun exp")
        | [] -> subst_type res_tysubst e) in
     let main_ty = eval_type params (ty_of_tysc res_ty) in
-    let unbound_vars = find_poly_vars params in
+    let unbound_vars = find_poly_vars (List.map params ~f:id_of_annot_id) in
     (TyScheme(unbound_vars, main_ty), res_tysubst)
   | AppExp(exp1, exp2) ->
     let ty_exp1, tysubst1 = ty_exp tyenv exp1 in
@@ -526,8 +549,14 @@ let rec ty_decl (tyenv: tyenv) = function
   | Exp e -> 
     let (type_, _) = ty_exp tyenv e in
     (type_, tyenv)
-  | Decl(id, e) -> 
-    let e_ty, _ = ty_decl tyenv (Exp e)  in
+  | Decl((id, Some ty_annot), e) -> 
+    let e_tysc, e_subst = ty_exp tyenv e in
+    let main_subst = unify ((ty_of_tysc e_tysc, ty_annot):: eqls_of_subst e_subst) in
+    let main_e_ty = subst_type main_subst (ty_of_tysc e_tysc) in
+    let new_tyenv = Environment.extend id (closure main_e_ty tyenv []) tyenv in
+    (tysc_of_ty main_e_ty, new_tyenv)
+  | Decl((id, None), e) -> 
+    let e_ty, _ = ty_decl tyenv (Exp e) in
     let new_tyenv = Environment.extend id (closure (ty_of_tysc e_ty) tyenv []) tyenv in
     (e_ty, new_tyenv)
   | RecDecl (id, para, e) -> 
