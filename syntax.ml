@@ -114,6 +114,7 @@ type program =
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty
+[@@deriving show]
 
 let tysc_of_ty t = TyScheme([], t)
 

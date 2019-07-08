@@ -7,12 +7,14 @@ open Str
 
 let test = ref false
 let load_file = ref "-"
+let debug = ref false
 
 let rec load_prog_list env tyenv l =
   match l with
   | phrase :: rest -> 
     (try
        let decl = Parser.toplevel Lexer.main (Lexing.from_string (phrase ^ ";;")) in
+       if !debug then print_string (show_program decl ^ "\n");
        let tysc, new_tyenv = ty_decl tyenv decl in
        let (id, newenv, v) = eval_decl env decl in
        if not (ty_of_tysc tysc = TyDummy) then
@@ -34,7 +36,7 @@ let rec read_eval_print env tyenv =
   flush stdout;
   try
     let decl = Parser.toplevel Lexer.main (Lexing.from_channel stdin) in
-    print_string (show_program decl);
+    if !debug then print_string (show_program decl ^ "\n");
     let tysc, new_tyenv = ty_decl tyenv decl in
     let (id, newenv, v) = eval_decl env decl in
     if not (ty_of_tysc tysc = TyDummy) then 
@@ -63,13 +65,15 @@ let initial_tytyenv = Environment.empty
 
 let srcfile = ref "-"
 
-let usage = "Usage: " ^ Sys.argv.(0) ^ " [-test] [-load <filename>]"
+let usage = "Usage: " ^ Sys.argv.(0) ^ " [-test] [-load <filename>] [-debug]"
 
 let aspec = Arg.align [
     ("-test", Arg.Unit (fun () -> test := true),
      " run test");
     ("-load", Arg.Set_string load_file, 
-     "load program before starting REPL")]
+     "load program before starting REPL");
+    ("-debug", Arg.Unit (fun () -> debug := true), 
+     "debug (output parse tree)")]
 
 (** the main default REPL function *)
 let main() = 

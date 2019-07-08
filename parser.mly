@@ -25,31 +25,63 @@ open Syntax
 toplevel :
   | e=Expr SEMISEMI { Exp e }
   | LET x=ID EQ e=Expr SEMISEMI { Decl((x, None), e) }
-  | LET LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr SEMISEMI { Decl((x, Some ty), e) }
+  /* | LET LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr SEMISEMI { Decl((x, Some ty), e) } */
+  | LET x=AnnotIdExpr EQ e=Expr SEMISEMI { Decl(x, e) }
   | LET f=ID b=LETFUNExpr { Decl((f, None), b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
   | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
   | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(recname, fields) }
 
+Expr :
+  | e=IfExpr { e } (* if expression *)
+  | e=ORExpr { e } (* boolean expression *)  
+  | e=LETExpr { e } (* let expression *)
+  | e=LETRECExpr { e } (* recursive let expression *)
+  | e=FUNExpr { e } (* static function expression *)
+  | e=DFUNExpr { e } (* dynamic function expression *)
+  | e=BinExpr { e } (* binary expressions *) 
+  | e=MatchExpr { e } (* match expressions *)
+  | e=TupleExpr { e } (* tuple expression *)
+  | e=RecordExpr { e } (* record expression *)
+
 TypeExpr :
   | INT { TyInt }
   | BOOL { TyBool }
   | FLOAT { TyFloat }
   | i=ID { TyUser i }
-  /* | s=TYVARANNOT { TyVar(fresh_tyvar_annot s) } */
+  | s=TYVARANNOT { TyVar(fresh_tyvar_annot s) }
   | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
   | lty=TypeExpr LIST { TyList lty }
   | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
   | LPAREN e=TypeExpr RPAREN { e }
 
 (* let function declarations *)
+(* ex: let f x y = x + y *)
 LETFUNExpr :
   | para=LETFUNPARAExpr e=Expr SEMISEMI { FunExp(para, e) }
 
 LETFUNPARAExpr :
   | x=AnnotIdExpr l=LETFUNPARAExpr { x :: l }
   | x=AnnotIdExpr EQ { x :: [] }
+
+(* let expression *)
+(* ex: let x = 3 and y = 5 in x + y *)
+LETExpr :
+  | LET e1=MULTILETExpr IN e2=Expr { MultiLetExp(e1, e2) } (* simple value declarations *)
+
+MULTILETExpr : 
+  | x=ID EQ e=Expr LETAND l=MULTILETExpr { ((x, None), e) :: l }
+  | x=ID EQ e=Expr { ((x, None), e) :: [] }
+  | x=AnnotIdExpr EQ e=Expr LETAND l=MULTILETExpr { (x, e) :: l }
+  | x=AnnotIdExpr EQ e=Expr { (x, e) :: [] }
+  | f=ID params=LETFUNPARAExpr e=Expr LETAND l=MULTILETExpr { ((f, None), FunExp(params, e)) :: l }
+  | f=ID params=LETFUNPARAExpr e=Expr { ((f, None), FunExp(params, e)) :: [] }
+
+(* let rec expression *)
+LETRECExpr : 
+  | LET REC f=ID EQ FUN para=ID RARROW e1=Expr IN e2=Expr { LetRecExp(f, para, e1, e2) }
+  | LET REC f=ID para=ID EQ e1=Expr IN e2=Expr { LetRecExp(f, para, e1 ,e2) }
 
 (* type declarations *)
 TYDECLSExpr : 
@@ -63,18 +95,6 @@ FieldsDeclExpr :
   | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t)] }
   | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t)] }
   | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t):: rest }
-
-Expr :
-  | e=IfExpr { e } (* if expression *)
-  | e=ORExpr { e } (* boolean expression *)  
-  | e=LETExpr { e } (* let expression *)
-  | e=LETRECExpr { e } (* recursive let expression *)
-  | e=FUNExpr { e } (* static function expression *)
-  | e=DFUNExpr { e } (* dynamic function expression *)
-  | e=BinExpr { e } (* binary expressions *) 
-  | e=MatchExpr { e } (* match expressions *)
-  | e=TupleExpr { e } (* tuple expression *)
-  | e=RecordExpr { e } (* record expression *)
 
 (* use records *)
 RecordExpr : 
@@ -137,23 +157,6 @@ RecordMatchTailExpr :
 TupleExpr : 
   | e1=Expr COMMA e2=Expr { TupleExp(e1, e2) } 
   | LPAREN e1=Expr COMMA e2=Expr RPAREN { TupleExp(e1, e2) }
-
-(* let expression *)
-LETExpr :
-  | LET e1=MULTILETExpr IN e2=Expr { MultiLetExp(e1, e2) } (* simple value declarations *)
-
-MULTILETExpr : 
-  | x=ID EQ e=Expr LETAND l=MULTILETExpr { ((x, None), e) :: l }
-  | x=ID EQ e=Expr { ((x, None), e) :: [] }
-  | LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr LETAND l=MULTILETExpr { ((x, Some ty), e) :: l }
-  | LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr { ((x, Some ty), e) :: [] }
-  | f=ID params=LETFUNPARAExpr e=Expr LETAND l=MULTILETExpr { ((f, None), FunExp(params, e)) :: l }
-  | f=ID params=LETFUNPARAExpr e=Expr { ((f, None), FunExp(params, e)) :: [] }
-
-(* let rec expression *)
-LETRECExpr : 
-  | LET REC f=ID EQ FUN para=ID RARROW e1=Expr IN e2=Expr { LetRecExp(f, para, e1, e2) }
-  | LET REC f=ID para=ID EQ e1=Expr IN e2=Expr { LetRecExp(f, para, e1 ,e2) }
 
 /* LETEXPDECLExpr : (* <f x y x = x + y * z> / <x = 2> *)
   | x=ID EQ e=Expr { (x, e) } (* for simple declarations *)
@@ -244,11 +247,12 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
+  | i=ID { Var(ID (i, None)) }
   | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }
   | e=AnnotIdExpr { Var(ID e) } (* includes non annotated ids *)
 
 AnnotIdExpr : 
-  | i=ID { (i, None) }
-  | LPAREN i=ID COLON ty=TypeExpr RPAREN { (i, Some ty) }
+  | i=ID COLON ty=TypeExpr { (i, Some ty) }
   | LPAREN e=AnnotIdExpr RPAREN { e }
+  | i=ID { (i, None) }

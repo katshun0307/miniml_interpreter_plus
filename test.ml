@@ -382,18 +382,50 @@ let record_tests = "record tests" >::: [
   ]
 
 let type_hint_tests = "type hint" >::: [
-    "decl" >:: (fun _ -> assert_equal_content
-                   {ty = TyInt; v = Some (IntV 3)}
-                   (test_eval_loop ["let (x:int) = 3"])
-               );
-    "letexp0" >:: (fun _ -> assert_equal_content
-                      {ty = TyInt; v = Some (IntV 3)}
-                      (test_eval_loop ["let (x:int) = 3 in x"])
-                  );
-    "letexp1" >:: (fun _ -> assert_equal_content
-                      {ty = TyInt; v = Some (IntV 3)}
-                      (test_eval_loop ["let x = 3 in (x:int)"])
-                  );
+    "val00" >:: (fun _ -> assert_equal_content
+                    {ty = TyInt; v = Some (IntV 3)}
+                    (test_eval_loop ["(3:int)"])
+                );
+    "val01" >:: (fun _ -> assert_equal_content
+                    {ty = TyInt; v = Some (IntV 3)}
+                    (test_eval_loop ["((3:int))"])
+                );
+    "decl00" >:: (fun _ -> assert_equal_content
+                     {ty = TyInt; v = Some (IntV 3)}
+                     (test_eval_loop ["let x:int = 3"])
+                 );
+    "decl01" >:: (fun _ -> assert_equal_content
+                     {ty = TyInt; v = Some (IntV 3)}
+                     (test_eval_loop ["let (x:int) = 3"])
+                 );
+    "decl10" >:: (fun _ -> assert_equal_content
+                     {ty = TyInt; v = Some (IntV 3)}
+                     (test_eval_loop ["let x = (3:int)"])
+                 );
+    "decl11" >:: (fun _ -> assert_equal_content
+                     {ty = TyInt; v = Some (IntV 3)}
+                     (test_eval_loop ["let x = ((3:int))"])
+                 );
+    "letexp00" >:: (fun _ -> assert_equal_content
+                       {ty = TyInt; v = Some (IntV 3)}
+                       (test_eval_loop ["let x:int = 3 in x"])
+                   );
+    "letexp01" >:: (fun _ -> assert_equal_content
+                       {ty = TyInt; v = Some (IntV 3)}
+                       (test_eval_loop ["let (x:int) = 3 in x"])
+                   );
+    "letexp02" >:: (fun _ -> assert_equal_content
+                       {ty = TyInt; v = Some (IntV 3)}
+                       (test_eval_loop ["let ((x:int)) = 3 in x"])
+                   );
+    "letexp11" >:: (fun _ -> assert_equal_content
+                       {ty = TyInt; v = Some (IntV 3)}
+                       (test_eval_loop ["let x = 3 in (x:int)"])
+                   );
+    "letexp12" >:: (fun _ -> assert_equal_content
+                       {ty = TyInt; v = Some (IntV 3)}
+                       (test_eval_loop ["let x = 3 in ((x:int))"])
+                   );
   ] 
 
 
