@@ -40,6 +40,8 @@ let rec subst_type s ty =
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
     | TyUser id -> TyUser id
+    | TyRef t -> TyRef (resolve_subst subst_pair t)
+    | TyUnit -> TyUnit
     | TyDummy -> TyDummy
   in match s with 
   | top :: rest -> 
@@ -113,10 +115,12 @@ let get_type = function
   | TyBool -> "tybool"
   | TyInt -> "tyint"
   | TyFloat -> "tyfloat"
+  | TyUnit -> "tyunit"
   | TyFun _ -> "tyfun"
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
   | TyUser ty_name -> ty_name
+  | TyRef _ -> "tyref"
   | TyDummy -> "dummy"
 
 (* (ex) ['a; int; int 'b] -> [('a, int); (int; int); (int, 'b)] *)
@@ -520,6 +524,23 @@ let rec ty_exp tyenv = function
     let field_type = List.Assoc.find_exn (Environment.lookup rec_name !record_env) ~equal:(=) fieldname in
     let main_subst = unify ((ty_of_tysc e1_tysc, TyUser rec_name):: (eqls_of_subst e1_subst)) in
     (tysc_of_ty field_type, main_subst)
+  | Reference e1 -> 
+    let e1_tysc, e1_subst = ty_exp tyenv e1 in
+    let main_ty = TyRef (ty_of_tysc e1_tysc) in
+    (tysc_of_ty main_ty, e1_subst)
+  | Assign(i, e1) -> 
+    let location_tysc, location_subst = ty_exp tyenv (Var(ID i)) in
+    let e1_tysc, e1_subst = ty_exp tyenv e1 in
+    (match ty_of_tysc location_tysc with
+     | TyRef content_ty -> 
+       let main_subst = unify ((content_ty, ty_of_tysc e1_tysc)::eqls_of_subst location_subst) in
+       (tysc_of_ty TyUnit, main_subst)
+     | _ -> err "cannot assign value to non-reference")
+  | Deassign e1 -> 
+    let e1_tysc, e1_subst = ty_exp tyenv e1 in
+    (match ty_of_tysc e1_tysc with
+     | TyRef content_ty -> (tysc_of_ty content_ty, e1_subst)
+     | _ -> err "cannot deassign non-reference")
   | _ -> err "ty_exp: not implemented"
 
 let rec ty_decl (tyenv: tyenv) = function

@@ -43,6 +43,8 @@ type ty =
   | TyList of ty
   | TyTuple of ty * ty
   | TyUser of id
+  | TyRef of ty
+  | TyUnit
   | TyDummy (* return type of type declaration *)
 
 type match_pattern = 
@@ -80,6 +82,9 @@ type exp =
   | TupleExp of exp * exp (* tuple expression *)
   | RecordExp of (id * exp) list (* (fieldname * exp) list *)
   | RecordAppExp of exp * id (* exp of record and id of fieldname *)
+  | Reference of exp
+  | Assign of id * exp
+  | Deassign of exp
 
 type program =
     Exp of exp
@@ -111,6 +116,7 @@ let rec pp_ty = function
   | TyInt -> print_string "int"
   | TyBool -> print_string "bool"
   | TyFloat -> print_string "float"
+  | TyUnit -> print_string "unit"
   | TyVar id -> print_string (tyvar_string_of_int id)
   | TyFun(a, b)-> 
     print_string "(";
@@ -128,12 +134,16 @@ let rec pp_ty = function
      print_string ")")
   | TyUser id -> 
     print_string id
+  | TyRef t1 -> 
+    (pp_ty t1;
+     print_string "ref ")
   | TyDummy -> print_string "@@@"
 
 let rec string_of_ty = function
   | TyInt ->  "int"
   | TyBool ->  "bool"
   | TyFloat -> "float"
+  | TyUnit -> "unit"
   | TyVar id ->  tyvar_string_of_int id
   | TyFun(a, b) -> 
     (match a with
@@ -143,6 +153,7 @@ let rec string_of_ty = function
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
   | TyUser id ->
     "@" ^ id
+  | TyRef t1 -> string_of_ty t1 ^ " ref"
   | TyDummy -> "TyDummy"
 
 let string_of_eqls eqls =
@@ -226,9 +237,9 @@ let freevar_tysc (TyScheme(b, ty)) =
   let bounds = MySet.from_list b in
   let rec loop ty = 
     match ty with
-    | TyInt | TyBool | TyFloat | TyUser _ | TyDummy -> MySet.empty
+    | TyInt | TyBool | TyFloat | TyUser _ | TyDummy | TyUnit -> MySet.empty
     | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
-    | TyList t1 -> loop t1
+    | TyList t1 | TyRef t1 -> loop t1
     | TyVar v -> 
       if MySet.member v bounds
       then MySet.empty

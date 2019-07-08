@@ -14,6 +14,7 @@ type token =
   | SEMISEMI
   | SEMI
   | RPAREN
+  | REF
   | REC
   | RCURLY
   | RARROW
@@ -51,10 +52,12 @@ type token =
   | DOT
   | DIVIDE
   | DFUN
+  | DEASSIGN
   | CONS
   | COMMA
   | COLON
   | BOOL
+  | ASSIGN
   | AND
 
 (* This exception is raised by the monolithic API functions. *)

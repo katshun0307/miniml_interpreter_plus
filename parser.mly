@@ -10,7 +10,8 @@ open Syntax
 %token RARROW FUN DFUN
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
 %token INT BOOL LIST UNDERBAR FLOAT
-%token TYPE OF COLON LCURLY RCURLY DOT
+%token TYPE OF COLON LCURLY RCURLY DOT 
+%token REF ASSIGN DEASSIGN
 
 %token <int> INTV
 %token <float> FLOATV
@@ -29,6 +30,7 @@ toplevel :
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
   | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
   | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(recname, fields) }
+
 
 TypeExpr :
   | INT { TyInt }
@@ -72,6 +74,7 @@ Expr :
   | e=MatchExpr { e } (* match expressions *)
   | e=TupleExpr { e } (* tuple expression *)
   | e=RecordExpr { e } (* record expression *)
+  | i=ID ASSIGN e=Expr { Assign(i, e) }
 
 (* use records *)
 RecordExpr : 
@@ -244,3 +247,5 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | i=ID   { Var (ID i) }
   | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }
+  | REF e=Expr { Reference e } 
+  | DEASSIGN e=Expr { Deassign e }
