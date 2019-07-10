@@ -23,6 +23,7 @@ let reservedWords = [
   ("float_of_int", Parser.FLOAT_OF_INT);
   ("int_of_float", Parser.INT_OF_FLOAT);
   ("ref", Parser.REF);
+  ("mutable", Parser.MUTABLE);
 ] 
 }
 
@@ -47,6 +48,7 @@ rule main = parse
 | "-." { Parser.FMINUS }
 | "*." { Parser.FMULT }
 | "/." { Parser.FDIVIDE }
+| "<-" { Parser.MUTE }
 | "<." { Parser.FLT }
 | "+" { Parser.PLUS }
 | "-" { Parser.MINUS }

@@ -80,8 +80,9 @@ type exp =
   | LetRecExp of id * id * exp * exp (* recursive function expression *)
   | MatchExp of exp * (match_pattern * exp) list (* list match *)
   | TupleExp of exp * exp (* tuple expression *)
-  | RecordExp of (id * exp) list (* (fieldname * exp) list *)
+  | RecordExp of id ref * (id * exp * bool ref) list (* id option (typename) is none by default. *)
   | RecordAppExp of exp * id (* exp of record and id of fieldname *)
+  | RecordMuteExp of exp * id * exp (* exp of record and id of fieldname *)
   | Reference of exp
   | Assign of id * exp
   | Deassign of exp
@@ -91,7 +92,7 @@ type program =
   | Decl of id * exp
   | RecDecl of id * id * exp
   | TypeDecl of id * ((tyid * ty) list)
-  | RecordDecl of id * ((id * ty) list)
+  | RecordDecl of id * ((id * ty * bool) list)
 
 (* type scheme *)
 type tysc = TyScheme of tyvar list * ty

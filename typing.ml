@@ -16,7 +16,7 @@ type subst = (tyvar * ty) list
 let variant_env = ref (Environment.empty: (tyid * ty) list Environment.t)
 
 (* get list of record contents (field name and type) from record type name *)
-let record_env = ref (Environment.empty: (id * ty) list Environment.t)
+let record_env = ref (Environment.empty: (id * ty * bool) list Environment.t)
 
 (* printing *)
 let rec string_of_subst = function 
@@ -135,7 +135,7 @@ let get_record_type_from_fields fieldname_list is_underbar =
   let rec loop current_env = 
     match current_env with
     | (spec_list, tyname):: rest -> 
-      let spec_fname_list = List.map ~f:(fun (fname, _) -> fname) spec_list in
+      let spec_fname_list = List.map ~f:(fun (fname, _, _) -> fname) spec_list in
       if MySet.equals spec_fname_list fieldname_list
       || (is_underbar && MySet.diff fieldname_list spec_fname_list = [])
       then tyname
@@ -222,7 +222,7 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
   | IdPattern _, RecordPattern (fl, is_u) ->  
     let record_name = get_record_type_from_fields (List.map fl ~f:(fun (fname, _) -> fname)) is_u in
     let record_specs = Environment.lookup record_name (!record_env) in
-    Undecidable [RecordPattern (List.map record_specs ~f:(fun (fname, _ ) -> (fname, IdPattern "_")), is_u)]
+    Undecidable [RecordPattern (List.map record_specs ~f:(fun (fname, _, _) -> (fname, IdPattern "_")), is_u)]
   | IdPattern _, TuplePattern _ -> Undecidable [TuplePattern(IdPattern "_", IdPattern "_")]
   | _, UnderbarPattern -> Match
   | _ -> NoMatch
@@ -420,14 +420,16 @@ let rec ty_exp tyenv = function
            extend_pattern_env ipt pt_tyconstructor accum_tyenv accum_eqls
          | _ -> err "error in match")
       | RecordPattern (l, _), TyUser ty_id -> 
-        let ty_specs = Environment.lookup ty_id !record_env in
+        let ty_specs' = Environment.lookup ty_id !record_env in
+        let ty_specs = List.map ~f:(fun (a, b, c) -> (a, b)) ty_specs' in
         List.fold l ~init:(accum_tyenv, accum_eqls)
           ~f:(fun (accum_env, accum_eqls) (id, ipt) -> 
               let correct_ty = List.Assoc.find_exn ty_specs id ~equal:(=) in
               extend_pattern_env ipt correct_ty accum_env accum_eqls)
       | RecordPattern (l, _), TyVar tid -> 
         let tyname = get_record_type_from_fields (List.map ~f:(fun (fname, _) -> fname) l) true in
-        let ty_specs = Environment.lookup tyname !record_env in
+        let ty_specs' = Environment.lookup tyname !record_env in
+        let ty_specs = List.map ~f:(fun (a, b, c) -> (a, b)) ty_specs' in
         let tyenv', accum_eqls' =  List.fold l ~init:(accum_tyenv, accum_eqls)
             ~f:(fun (accum_tyenv, accum_eqls) (fieldname, ipt) -> 
                 let correct_ty = List.Assoc.find_exn ty_specs fieldname ~equal:(=) in
@@ -502,15 +504,17 @@ let rec ty_exp tyenv = function
     let main_subst = unify (eqls_of_subst ty_subst1 @ eqls_of_subst ty_subst2) in
     let main_ty = TyTuple(subst_type main_subst (ty_of_tysc tysc1),subst_type main_subst (ty_of_tysc tysc2)) in
     (tysc_of_ty main_ty, [])
-  | RecordExp fl -> 
+  | RecordExp (tyname_ref, fl) -> 
     let record_type_name = List.Assoc.find_exn (Environment.reverse !record_env)
-        ~equal:(fun l1 l2 -> List.for_all l1 ~f:(fun (x, _) -> List.exists l2 ~f:(fun (y, _) -> y = x)))
-        (List.map ~f:(fun (fname, _) -> (fname, TyDummy)) fl) in
+        ~equal:(fun l1 l2 -> List.for_all l1 ~f:(fun (x, _, _) -> List.exists l2 ~f:(fun (y, _, _) -> y = x)))
+        (List.map ~f:(fun (fname, _, _) -> (fname, TyDummy, false)) fl) in
+    tyname_ref := record_type_name;
     let record_type_specs = Environment.lookup record_type_name (!record_env) in
     let rec loop accum_equals = function
-      | (fname, fcontent):: rest ->
+      | (fname, fcontent, is_mut_ref):: rest ->
         let local_tysc, local_subst = ty_exp tyenv fcontent in
-        let correct_type = List.Assoc.find_exn record_type_specs ~equal:(=) fname in
+        let (_, correct_type, is_mut_spec) = List.find_exn record_type_specs ~f:(fun (fname_spec, _, _) -> fname = fname_spec) in
+        is_mut_ref := is_mut_spec;
         loop ((ty_of_tysc local_tysc, correct_type) :: accum_equals) rest
       | [] -> accum_equals in
     let main_eqls = loop [] fl in
@@ -518,12 +522,25 @@ let rec ty_exp tyenv = function
     (tysc_of_ty (TyUser record_type_name), main_subst)
   | RecordAppExp(e1, fieldname) ->
     let e1_tysc, e1_subst = ty_exp tyenv e1 in
-    (* search recnames with fieldname in it *)
-    let (_, rec_name) = List.find_exn (Environment.reverse !record_env) 
-        ~f:(fun (fl, _) -> List.exists fl ~f:(fun (fname, ftype) -> fname = fieldname)) in
-    let field_type = List.Assoc.find_exn (Environment.lookup rec_name !record_env) ~equal:(=) fieldname in
-    let main_subst = unify ((ty_of_tysc e1_tysc, TyUser rec_name):: (eqls_of_subst e1_subst)) in
-    (tysc_of_ty field_type, main_subst)
+    (match ty_of_tysc e1_tysc with
+     | TyUser record_tyname -> 
+       let field_specs = Environment.lookup record_tyname (!record_env) in
+       let target_field = List.find_exn field_specs ~f:(fun (fname, _, _) -> fname = fieldname) in
+       let (_, t, _) = target_field in
+       (tysc_of_ty t, e1_subst)
+     | _ -> err "this is not a record")
+  | RecordMuteExp(e1, fieldname, e2) ->
+    let e1_tysc, e1_subst = ty_exp tyenv e1 in
+    (match ty_of_tysc e1_tysc with
+     | TyUser record_tyname -> 
+       let field_specs = Environment.lookup record_tyname (!record_env) in
+       let (_, target_type, is_mutable) = List.find_exn field_specs ~f:(fun (fname, _, _) -> fname = fieldname) in
+       if is_mutable then 
+         let e2_tysc, e2_subst = ty_exp tyenv e2 in
+         let main_subst = unify ((target_type, ty_of_tysc e2_tysc):: eqls_of_subst e1_subst @ eqls_of_subst e2_subst) in
+         (tysc_of_ty (subst_type main_subst target_type), main_subst)
+       else err "field is not mutable"
+     | _ -> err "this is not a record")
   | Reference e1 -> 
     let e1_tysc, e1_subst = ty_exp tyenv e1 in
     let main_ty = TyRef (ty_of_tysc e1_tysc) in

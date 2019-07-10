@@ -21,6 +21,8 @@ type token =
   | PLUS
   | OR
   | OF
+  | MUTE
+  | MUTABLE
   | MULT
   | MODULO
   | MINUS

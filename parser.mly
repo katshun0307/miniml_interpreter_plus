@@ -11,7 +11,7 @@ open Syntax
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
 %token INT BOOL LIST UNDERBAR FLOAT
 %token TYPE OF COLON LCURLY RCURLY DOT 
-%token REF ASSIGN DEASSIGN
+%token REF ASSIGN DEASSIGN MUTABLE MUTE
 
 %token <int> INTV
 %token <float> FLOATV
@@ -59,9 +59,12 @@ TYDECLSExpr :
 
 (* record declarations *)
 FieldsDeclExpr : 
-  | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t)] }
-  | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t)] }
-  | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t):: rest }
+  | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t, false)] }
+  | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t, false)] }
+  | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t, false):: rest }
+  | MUTABLE fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t, true)] }
+  | MUTABLE fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t, true)] }
+  | MUTABLE fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t, true):: rest }
 
 Expr :
   | e=IfExpr { e } (* if expression *)
@@ -75,15 +78,16 @@ Expr :
   | e=TupleExpr { e } (* tuple expression *)
   | e=RecordExpr { e } (* record expression *)
   | i=ID ASSIGN e=Expr { Assign(i, e) }
+  | e1=Expr DOT field=ID MUTE e2=Expr { RecordMuteExp(e1, field, e2) } 
 
 (* use records *)
 RecordExpr : 
-  | LCURLY content=RecordContentExpr { RecordExp(content) }
+  | LCURLY content=RecordContentExpr { let tyref = ref "-" in RecordExp(tyref, content) }
 
 RecordContentExpr : 
-  | fieldname=ID EQ content=Expr RCURLY { [(fieldname, content)] }
-  | fieldname=ID EQ content=Expr SEMI RCURLY { [(fieldname, content)] }
-  | fieldname=ID EQ content=Expr SEMI rest=RecordContentExpr { (fieldname, content):: rest }
+  | fieldname=ID EQ content=Expr RCURLY { let mut_ref = ref false in [(fieldname, content, mut_ref)] }
+  | fieldname=ID EQ content=Expr SEMI RCURLY { let mut_ref = ref false in [(fieldname, content, mut_ref)] }
+  | fieldname=ID EQ content=Expr SEMI rest=RecordContentExpr { let mut_ref = ref false in (fieldname, content, mut_ref):: rest }
 
 (* if expression *)
 IfExpr :
@@ -202,7 +206,7 @@ AppExpr : (* function application *)
   | e1=AppExpr e2=AExpr { AppExp(e1, e2) }
   | e1=BinExpr e2=AExpr { AppExp(e1, e2) }
   | vari=TYID e2=Expr { AppExp(Var (VARIANT vari), e2) }
-  | e1=AppExpr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
+  | e1=Expr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
   | e=AExpr { e }
 
 (* static function expression *)
