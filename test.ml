@@ -428,6 +428,36 @@ let type_hint_tests = "type hint" >::: [
                    );
   ] 
 
+let ref_tests = "ref tests" >::: [
+    "basic ref0" >:: (fun _ -> assert_equal_content
+                         {ty = TyRef TyInt; v = None}
+                         (test_eval_loop ["let a = ref 4"; "a"])
+                     );
+    "basic ref1" >:: (fun _ -> assert_equal_content
+                         {ty = TyInt; v = Some(IntV 3)}
+                         (test_eval_loop ["let a = ref 3"; "!a"])
+                     );
+    "basic ref2" >:: (fun _ -> assert_equal_content
+                         {ty =TyInt; v = Some(IntV 100)}
+                         (test_eval_loop ["let a = ref 4"; "a := 100"; "!a"])
+                     );
+    "advanced ref0" >:: (fun _ -> assert_equal_content
+                            {ty = TyInt; v = Some(IntV 100)}
+                            (test_eval_loop ["let a = ref 3"; "let b = a"; "a:=100"; "!a"])
+                        );
+    "advanced ref1" >:: (fun _ -> assert_equal_content
+                            {ty = TyInt; v = Some(IntV 100)}
+                            (test_eval_loop ["let a = ref 3"; "let b = a"; "a:=100"; "!b"])
+                        );
+    "advanced ref2" >:: (fun _ -> assert_equal_content
+                            {ty = TyInt; v = Some(IntV 100)}
+                            (test_eval_loop ["let a = ref 3"; "let b = a"; "b:=100"; "!a"])
+                        );
+    "advanced ref3" >:: (fun _ -> assert_equal_content
+                            {ty = TyInt; v = Some(IntV 100)}
+                            (test_eval_loop ["let a = ref 3"; "let b = a"; "b:=100"; "!b"])
+                        );
+  ]
 
 let tests = "all tests" >::: [
     binop_tests;
@@ -442,6 +472,7 @@ let tests = "all tests" >::: [
     advanced_match_tests;
     advanced_tests;
     type_hint_tests;
+    ref_tests;
   ]
 
 let run_test () = 

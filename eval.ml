@@ -3,8 +3,19 @@ open Core
 
 exception MatchFail
 exception SameVarError
+exception Error of string
+let err s = raise (Error s)
 
 (* 値の定義 *)
+type location = int
+
+let fresh_location = 
+  let counter = ref 0 in
+  let body = 
+    fun () -> 
+      let v = !counter in
+      counter := v + 1; v in
+  body
 
 (* exval は式を評価して得られる値．dnval は変数と紐付けられる値. *)
 type exval =
@@ -22,11 +33,19 @@ type exval =
   | ArityAppUserV of tyid * exval
   | RecordV of id * ((id * exval) list)
   | RecordDefV of id * ((id * ty) list)
-and dnval = exval
+  | RefV of location
+  | UnitV
+and dnval = exval 
 
-exception Error of string
+let loc_mapping = ref ([]: (int * exval) list)
 
-let err s = raise (Error s)
+let append_loc loc v = 
+  loc_mapping := List.Assoc.add !loc_mapping ~equal:(=) loc v
+
+let lookup_loc loc = 
+  match List.Assoc.find !loc_mapping ~equal:(=) loc with
+  | Some x -> x
+  | None -> err "no value mapped to location"
 
 (* pretty printing *)
 let rec string_of_exval = function
@@ -51,6 +70,8 @@ let rec string_of_exval = function
     "type " ^ tyname ^ " = " ^ 
     String.concat ~sep:"| " 
       (List.map variant_list ~f:(fun (variant_id, content_ty) -> variant_id ^ " of " ^ (string_of_ty content_ty)))  
+  | RefV loc -> sprintf "{contents = %s}" (string_of_exval (lookup_loc loc))
+  | UnitV -> "()"
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -236,10 +257,27 @@ let rec eval_exp env = function
     RecordV("hoge(rectype comes here)", List.map fieldlist ~f:(fun (fname, fcontent) -> (fname, eval_exp env fcontent)))
   | RecordAppExp(e1, fieldname) -> 
     let e1val = eval_exp env e1 in
-    match e1val with
-    | RecordV(recname, fl) -> 
-      List.Assoc.find_exn fl fieldname ~equal:(=)
-    | _ -> err ("no field with type " ^ fieldname)
+    (match e1val with
+     | RecordV(recname, fl) -> 
+       List.Assoc.find_exn fl fieldname ~equal:(=)
+     | _ -> err ("no field with type " ^ fieldname))
+  | Reference content -> 
+    let content_v = eval_exp env content in
+    let new_loc = fresh_location () in
+    append_loc new_loc content_v;
+    RefV new_loc
+  | Assign (i, e1) -> 
+    let ref_value = eval_exp env (Var(ID i)) in
+    let e1_value = eval_exp env e1 in
+    (match ref_value with 
+     | RefV loc -> append_loc loc e1_value;
+       UnitV
+     | _ -> err "cannot assign to non-reference")
+  | Deassign e1 -> 
+    let e1_val = eval_exp env e1 in
+    (match e1_val with
+     | RefV loc -> lookup_loc loc
+     | _ -> err "could not find reference")
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)

@@ -22,6 +22,7 @@ let reservedWords = [
   ("of", Parser.OF);
   ("float_of_int", Parser.FLOAT_OF_INT);
   ("int_of_float", Parser.INT_OF_FLOAT);
+  ("ref", Parser.REF);
 ] 
 
 
@@ -63,6 +64,8 @@ rule main = parse
 | "<" { Parser.LT }
 | "&&" { Parser.AND }
 | "||" { Parser.OR }
+| ":=" { Parser.ASSIGN }
+| "!" { Parser.DEASSIGN }
 | "=" { Parser.EQ }
 | "->" { Parser.RARROW }
 | "[" { Parser.SQLPAREN }
