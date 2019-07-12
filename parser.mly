@@ -11,7 +11,7 @@ open Syntax
 %token MATCH WITH CONS SQLPAREN SEMI SQRPAREN SPLIT COMMA
 %token INT BOOL LIST UNDERBAR FLOAT
 %token TYPE OF COLON LCURLY RCURLY DOT 
-%token REF ASSIGN DEASSIGN
+%token REF ASSIGN DEASSIGN MUTABLE MUTE
 
 %token <int> INTV
 %token <float> FLOATV
@@ -26,7 +26,7 @@ open Syntax
 toplevel :
   | e=Expr SEMISEMI { Exp e }
   | LET x=ID EQ e=Expr SEMISEMI { Decl((x, None), e) }
-  /* | LET LPAREN x=ID COLON ty=TypeExpr RPAREN EQ e=Expr SEMISEMI { Decl((x, Some ty), e) } */
+  | LET  x=ID COLON ty=TypeExpr EQ e=Expr SEMISEMI { Decl((x, Some ty), e) }
   | LET x=AnnotIdExpr EQ e=Expr SEMISEMI { Decl(x, e) }
   | LET f=ID b=LETFUNExpr { Decl((f, None), b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
@@ -45,6 +45,9 @@ Expr :
   | e=MatchExpr { e } (* match expressions *)
   | e=TupleExpr { e } (* tuple expression *)
   | e=RecordExpr { e } (* record expression *)
+  | LPAREN e=Expr COLON ty=TypeExpr RPAREN { Annotated(e, ty) }
+  | i=ID ASSIGN e=Expr { Assign(i, e) }
+  | e1=Expr DOT field=ID MUTE e2=Expr { RecordMuteExp(e1, field, e2) } 
 
 TypeExpr :
   | INT { TyInt }
@@ -55,6 +58,7 @@ TypeExpr :
   | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
   | lty=TypeExpr LIST { TyList lty }
   | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
+  | ty=TypeExpr REF { TyRef(ty) }
   | LPAREN e=TypeExpr RPAREN { e }
 
 (* let function declarations *)
@@ -74,6 +78,8 @@ LETExpr :
 MULTILETExpr : 
   | x=ID EQ e=Expr LETAND l=MULTILETExpr { ((x, None), e) :: l }
   | x=ID EQ e=Expr { ((x, None), e) :: [] }
+  | x=ID COLON ty=TypeExpr EQ e=Expr LETAND l=MULTILETExpr { ((x, Some ty), e) :: l }
+  | x=ID COLON ty=TypeExpr EQ e=Expr { ((x, Some ty), e) :: [] }
   | x=AnnotIdExpr EQ e=Expr LETAND l=MULTILETExpr { (x, e) :: l }
   | x=AnnotIdExpr EQ e=Expr { (x, e) :: [] }
   | f=ID params=LETFUNPARAExpr e=Expr LETAND l=MULTILETExpr { ((f, None), FunExp(params, e)) :: l }
@@ -93,18 +99,21 @@ TYDECLSExpr :
 
 (* record declarations *)
 FieldsDeclExpr : 
-  | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t)] }
-  | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t)] }
-  | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t):: rest }
+  | fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t, false)] }
+  | fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t, false)] }
+  | fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t, false):: rest }
+  | MUTABLE fieldname=ID COLON t=TypeExpr RCURLY { [(fieldname, t, true)] }
+  | MUTABLE fieldname=ID COLON t=TypeExpr SEMI RCURLY { [(fieldname, t, true)] }
+  | MUTABLE fieldname=ID COLON t=TypeExpr SEMI rest=FieldsDeclExpr { (fieldname, t, true):: rest }
 
 (* use records *)
 RecordExpr : 
-  | LCURLY content=RecordContentExpr { RecordExp(content) }
+  | LCURLY content=RecordContentExpr { let tyref = ref "-" in RecordExp(tyref, content) }
 
 RecordContentExpr : 
-  | fieldname=ID EQ content=Expr RCURLY { [(fieldname, content)] }
-  | fieldname=ID EQ content=Expr SEMI RCURLY { [(fieldname, content)] }
-  | fieldname=ID EQ content=Expr SEMI rest=RecordContentExpr { (fieldname, content):: rest }
+  | fieldname=ID EQ content=Expr RCURLY { let mut_ref = ref false in [(fieldname, content, mut_ref)] }
+  | fieldname=ID EQ content=Expr SEMI RCURLY { let mut_ref = ref false in [(fieldname, content, mut_ref)] }
+  | fieldname=ID EQ content=Expr SEMI rest=RecordContentExpr { let mut_ref = ref false in (fieldname, content, mut_ref):: rest }
 
 (* if expression *)
 IfExpr :
@@ -206,7 +215,7 @@ AppExpr : (* function application *)
   | e1=AppExpr e2=AExpr { AppExp(e1, e2) }
   | e1=BinExpr e2=AExpr { AppExp(e1, e2) }
   | vari=TYID e2=Expr { AppExp(Var (VARIANT vari), e2) }
-  | e1=AppExpr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
+  | e1=Expr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
   | e=AExpr { e }
 
 (* static function expression *)
@@ -248,12 +257,15 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | e=ListExpr { e }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
-  | i=ID { Var(ID (i, None)) }
+  /* | i=ID { Var(ID (i, None)) } */
   | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }
+  | REF e=Expr { Reference e } 
+  | DEASSIGN e=Expr { Deassign e }
   | e=AnnotIdExpr { Var(ID e) } (* includes non annotated ids *)
 
 AnnotIdExpr : 
-  | i=ID COLON ty=TypeExpr { (i, Some ty) }
+  /* | i=ID COLON ty=TypeExpr { (i, Some ty) } */
+  | LPAREN i=ID COLON ty=TypeExpr RPAREN { (i, Some ty) }
   | LPAREN e=AnnotIdExpr RPAREN { e }
   | i=ID { (i, None) }

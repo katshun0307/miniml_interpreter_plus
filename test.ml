@@ -426,6 +426,14 @@ let type_hint_tests = "type hint" >::: [
                        {ty = TyInt; v = Some (IntV 3)}
                        (test_eval_loop ["let x = 3 in ((x:int))"])
                    );
+    "exp0" >:: (fun _ -> assert_equal_content
+                   {ty = TyBool; v = Some (BoolV false)}
+                   (test_eval_loop ["(let a = 3 in let b = 4 in a = b: bool)"])
+               );
+    "exp1" >:: (fun _ -> assert_equal_content
+                   {ty = TyInt; v = Some (IntV 300)}
+                   (test_eval_loop ["(if (let a = 3 in let b = 4 in a = b: bool) then 400 else 300:int)"])
+               );
   ] 
 
 let ref_tests = "ref tests" >::: [

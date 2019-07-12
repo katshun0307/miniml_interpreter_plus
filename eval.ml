@@ -31,11 +31,11 @@ type exval =
   | UserDefV of id * ((id * ty) list)
   | ArityUserV of tyid
   | ArityAppUserV of tyid * exval
-  | RecordV of id * ((id * exval) list)
-  | RecordDefV of id * ((id * ty) list)
+  | RecordV of id * ((id * exval ref * bool) list)
+  | RecordDefV of id * ((id * ty * bool) list)
   | RefV of location
   | UnitV
-and dnval = exval 
+and dnval = exval
 
 let loc_mapping = ref ([]: (int * exval) list)
 
@@ -61,10 +61,14 @@ let rec string_of_exval = function
   | ArityUserV tyid -> tyid
   | ArityAppUserV (tyid, v) -> tyid ^ " of " ^ (string_of_exval v)
   | RecordV (recname, contentlist) -> 
-    "{" ^ Core.String.concat ~sep:"; " (List.map ~f:(fun (fname, fcontent) -> fname ^ "=" ^ (string_of_exval fcontent)) contentlist ) ^ "}"
+    "{" ^ Core.String.concat ~sep:"; " (List.map ~f:(fun (fname, fcontent, is_mut) -> 
+        let mut_str = if is_mut then "mutable " else "" in
+        mut_str ^ fname ^ "=" ^ (string_of_exval !fcontent)) contentlist ) ^ "}"
   | RecordDefV (recname, fl) ->
     "type " ^ recname ^ " = {" ^ 
-    (String.concat ~sep:"; " (List.map ~f:(fun (fname, fty) -> fname ^ " : " ^ (string_of_ty fty)) fl))
+    (String.concat ~sep:"; " (List.map ~f:(fun (fname, fty, is_mutable) -> 
+         let mut_str = if is_mutable then "mutable " else "" in
+         mut_str ^ fname ^ " : " ^ (string_of_ty fty)) fl))
     ^ "}"
   | UserDefV(tyname, variant_list) -> 
     "type " ^ tyname ^ " = " ^ 
@@ -235,7 +239,8 @@ let rec eval_exp env = function
       | RecordPattern (fl, _), RecordV(tyname, content_list) -> 
         List.fold fl ~init:accum_env
           ~f:(fun accum_env (fname, ipt) -> 
-              make_pattern_env ipt (List.Assoc.find_exn content_list ~equal:(=) fname) accum_env)
+              let (_, fval, _) = List.find_exn content_list ~f:(fun (fname_inner, _, _) -> fname = fname_inner) in
+              make_pattern_env ipt !fval accum_env)
       | IdPattern id, _ -> 
         if id = "_" then accum_env
         else Environment.extend id ex accum_env
@@ -253,21 +258,35 @@ let rec eval_exp env = function
       | [] -> err "match failed" in
     loop_pattern pattern_list
   | TupleExp(e1, e2) -> TupleV(eval_exp env e1, eval_exp env e2)
-  | RecordExp fieldlist -> 
-    RecordV("hoge(rectype comes here)", List.map fieldlist ~f:(fun (fname, fcontent) -> (fname, eval_exp env fcontent)))
+  | RecordExp (tyname_ref, fieldlist) -> 
+    RecordV(!tyname_ref, List.map fieldlist ~f:(fun (fname, fcontent, is_mut_ref) ->
+        (fname, ref (eval_exp env fcontent), !is_mut_ref)))
   | RecordAppExp(e1, fieldname) -> 
     let e1val = eval_exp env e1 in
     (match e1val with
-     | RecordV(recname, fl) -> 
-       List.Assoc.find_exn fl fieldname ~equal:(=)
+     | RecordV(rec_typename, fl) -> 
+       let (_, target_val, _) = List.find_exn ~f:(fun (fname_inner, _, _) -> fname_inner = fieldname) fl in
+       !target_val
      | _ -> err ("no field with type " ^ fieldname))
+  | RecordMuteExp(recordexp, fieldname, newexp) -> 
+    let record_v = eval_exp env recordexp in
+    let newexp_v = eval_exp env newexp in
+    (match record_v with 
+     | RecordV(_, fl) -> 
+       let (_, content_val_ref, is_mut) = List.find_exn fl 
+           ~f:(fun (fname_inner, _, _) -> fname_inner = fieldname) in
+       if is_mut then 
+         (content_val_ref := newexp_v;
+          UnitV)
+       else err "field is not mutable"
+     | _ -> err "not a record")
   | Reference content -> 
     let content_v = eval_exp env content in
     let new_loc = fresh_location () in
     append_loc new_loc content_v;
     RefV new_loc
   | Assign (i, e1) -> 
-    let ref_value = eval_exp env (Var(ID i)) in
+    let ref_value = eval_exp env (Var(ID (i, None))) in
     let e1_value = eval_exp env e1 in
     (match ref_value with 
      | RefV loc -> append_loc loc e1_value;
@@ -278,6 +297,8 @@ let rec eval_exp env = function
     (match e1_val with
      | RefV loc -> lookup_loc loc
      | _ -> err "could not find reference")
+  | Annotated(e, _) -> 
+    eval_exp env e
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ("-", env, v)
