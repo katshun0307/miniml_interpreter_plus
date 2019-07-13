@@ -40,6 +40,7 @@ let rec subst_type s ty =
     | TyList t -> TyList (resolve_subst subst_pair t)
     | TyTuple (t1, t2) -> TyTuple(resolve_subst subst_pair t1, resolve_subst subst_pair t2)
     | TyUser id -> TyUser id
+    | TyParaUser (t1, id) -> TyParaUser(resolve_subst subst_pair t1, id)
     | TyRef t -> TyRef (resolve_subst subst_pair t)
     | TyUnit -> TyUnit
     | TyDummy -> TyDummy
@@ -120,6 +121,7 @@ let get_type = function
   | TyList _ -> "tylist"
   | TyTuple _ -> "tytuple"
   | TyUser ty_name -> ty_name
+  | TyParaUser(_, tyname) -> tyname
   | TyRef _ -> "tyref"
   | TyDummy -> "dummy"
 
@@ -611,14 +613,19 @@ let rec ty_decl (tyenv: tyenv) = function
     let ty_para2 = subst_type main_subst ty_para in
     let main_ty = TyFun(ty_para2, ty_of_tysc tysc_main) in
     (tysc_of_ty main_ty, Environment.extend id (tysc_of_ty main_ty) tyenv)
-  | TypeDecl(type_name, variant_list) ->
+  | TypeDecl(tyarg_opt, type_name, variant_list) ->
     let rec append_tyenv l accum_tyenv = 
       match l with
       | (variant, TyDummy)::t -> 
         let accum_tyenv' =  Environment.extend variant (tysc_of_ty (TyUser type_name)) accum_tyenv in
         append_tyenv t accum_tyenv'
       | (variant, construct_ty)::t -> 
-        let accum_tyenv' =  Environment.extend variant (tysc_of_ty (TyFun(construct_ty, TyUser type_name))) accum_tyenv in
+        (* printf "construct_ty is %s\n" (string_of_ty construct_ty); *)
+        let accum_tyenv' = match tyarg_opt with
+          | Some x -> let x_ty = TyVar(fresh_tyvar_annot x) in
+            (* printf "x_ty is %s\n" (string_of_ty x_ty); *)
+            Environment.extend variant (tysc_of_ty (TyFun(construct_ty, TyParaUser (TyVar(fresh_tyvar_annot x), type_name)))) accum_tyenv
+          | None -> Environment.extend variant (tysc_of_ty (TyFun(construct_ty, TyUser type_name))) accum_tyenv in
         append_tyenv t accum_tyenv'
       | [] -> accum_tyenv in
     variant_env := Environment.extend type_name variant_list !variant_env;

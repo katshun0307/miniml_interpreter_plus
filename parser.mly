@@ -31,7 +31,8 @@ toplevel :
   | LET f=ID b=LETFUNExpr { Decl((f, None), b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
-  | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(ty, decls_rest) }
+  | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(None, ty, decls_rest) } (* variant declaration *)
+  | TYPE s=TYVARANNOT ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(Some s, ty, decls_rest) } (* variant declaration *)
   | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(recname, fields) }
 
 Expr :
@@ -54,12 +55,16 @@ TypeExpr :
   | BOOL { TyBool }
   | FLOAT { TyFloat }
   | i=ID { TyUser i }
-  | s=TYVARANNOT { TyVar(fresh_tyvar_annot s) }
+  | e=TyVarTypeExpr { e }
   | a=TypeExpr RARROW b=TypeExpr { TyFun(a, b) }
   | lty=TypeExpr LIST { TyList lty }
   | a=TypeExpr MULT b=TypeExpr { TyTuple(a, b) }
+  | ty=TypeExpr i=ID { TyParaUser(ty, i) }
   | ty=TypeExpr REF { TyRef(ty) }
   | LPAREN e=TypeExpr RPAREN { e }
+
+TyVarTypeExpr : 
+  | s=TYVARANNOT { TyVar(fresh_tyvar_annot s) }
 
 (* let function declarations *)
 (* ex: let f x y = x + y *)
@@ -214,7 +219,7 @@ MultExpr : (* multiplication *)
 AppExpr : (* function application *)
   | e1=AppExpr e2=AExpr { AppExp(e1, e2) }
   | e1=BinExpr e2=AExpr { AppExp(e1, e2) }
-  | vari=TYID e2=Expr { AppExp(Var (VARIANT vari), e2) }
+  | vari=TYID e2=AExpr { AppExp(Var (VARIANT vari), e2) }
   | e1=Expr DOT fieldname=ID { RecordAppExp(e1, fieldname) }
   | e=AExpr { e }
 

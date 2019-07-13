@@ -7,6 +7,7 @@ let err s = raise (Error s)
 
 (* ML interpreter / type reconstruction *)
 
+(* ids, used in variable names and user-defined type names *)
 type id = string
 [@@deriving show]
 
@@ -14,10 +15,13 @@ type id = string
 type tyid = string
 [@@deriving show]
 
+(* tyvar of zero should not be allocated *)
+(* tyvar annotations are negative, tyvars in interpreter are positive *)
 type tyvar = int
 [@@deriving show]
 
 (* type variable annotations by user *)
+(* converted to tyvar uniformly by fresh_tyvar_annot *)
 (* ex. 'a *)
 type tyvar_annot = string 
 [@@deriving show]
@@ -33,6 +37,7 @@ type ty =
   | TyList of ty
   | TyTuple of ty * ty
   | TyUser of id
+  | TyParaUser of ty * id 
   | TyDummy (* return type of type declaration *)
 [@@deriving show]
 
@@ -115,7 +120,7 @@ type program =
   | Exp of exp
   | Decl of annot_id * exp
   | RecDecl of id * id * exp
-  | TypeDecl of id * ((tyid * ty) list)
+  | TypeDecl of string option * id * ((tyid * ty) list)
   | RecordDecl of id * ((id * ty * bool) list)
 [@@deriving show]
 
@@ -128,58 +133,37 @@ let tysc_of_ty t = TyScheme([], t)
 let ty_of_tysc (TyScheme(_, ty)) = ty
 
 let tyvar_string_of_int n =
-  (* 26 * block + offset *)
-  let start_code = Char.to_int 'a' in
-  let alphabet_of_int n = 
-    (if n <= 26 then
-       Char.escaped (Char.of_int_exn (n + start_code))
-     else err "unexpected input") in
-  let offset = n mod 26 in
-  let block = (n - offset) / 26 in
-  if block = 0 then "'" ^ alphabet_of_int offset
-  else "'" ^ alphabet_of_int offset ^ string_of_int block
+  let inner n = 
+    (* 26 * block + offset *)
+    let start_code = Char.to_int 'a' in
+    let alphabet_of_int n = 
+      (if n <= 26 then
+         Char.escaped (Char.of_int_exn (n + start_code))
+       else err "unexpected input") in
+    let offset = n mod 26 in
+    let block = (n - offset) / 26 in
+    if block = 0 then "'" ^ alphabet_of_int offset
+    else "'" ^ alphabet_of_int offset ^ string_of_int block in
+  if n > 0 then inner n else "'" ^ inner (-n)
 
-let rec pp_ty = function
-  | TyInt -> print_string "int"
-  | TyBool -> print_string "bool"
-  | TyFloat -> print_string "float"
-  | TyUnit -> print_string "unit"
-  | TyVar id -> print_string (tyvar_string_of_int id)
-  | TyFun(a, b)-> 
-    print_string "(";
-    (pp_ty a;
-     print_string " -> ";
-     pp_ty b;)
-  | TyList t -> 
-    pp_ty t;
-    print_string " list"
-  | TyTuple (t1, t2) -> 
-    (print_string "(";
-     pp_ty t1;
-     print_string ", ";
-     pp_ty t2;
-     print_string ")")
-  | TyUser id -> 
-    print_string id
-  | TyRef t1 -> 
-    (pp_ty t1;
-     print_string "ref ")
-  | TyDummy -> print_string "@@@"
-
-let rec string_of_ty = function
+(* optional argument tyvar_str: convert tyvars to specific string *)
+let rec string_of_ty ?tyvar_str:(tyvar_str=[]) = function
   | TyInt ->  "int"
   | TyBool ->  "bool"
   | TyFloat -> "float"
   | TyUnit -> "unit"
-  | TyVar id ->  tyvar_string_of_int id
+  | TyVar id -> 
+    (match List.Assoc.find tyvar_str ~equal:(=) id with
+     | Some x -> x
+     | None -> tyvar_string_of_int id)
   | TyFun(a, b) -> 
     (match a with
      | TyFun (_, _) -> "(" ^ string_of_ty a ^ ") -> " ^ string_of_ty b
      | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
   | TyList t -> (string_of_ty t) ^ " list"
   | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
-  | TyUser id ->
-    "@" ^ id
+  | TyUser id -> id
+  | TyParaUser(t, id) -> string_of_ty t ^ " " ^ id
   | TyRef t1 -> string_of_ty t1 ^ " ref"
   | TyDummy -> "TyDummy"
 
@@ -235,18 +219,30 @@ let renumber_ty t =
       let t1', assoc1 = loop t1 assoc in
       let t2', assoc2 = loop t2 (assoc1 @ assoc) in
       (TyFun(t1', t2'), assoc1 @ assoc2)
+    | TyTuple(t1, t2) -> 
+      let t1', assoc1 = loop t1 assoc in
+      let t2', assoc2 = loop t2 (assoc1 @ assoc) in
+      (TyTuple(t1', t2'), assoc1 @ assoc2)
     | TyList t1 -> 
       let t', assoc' = loop t1 assoc in
       (TyList t', assoc')
+    | TyRef t1 -> 
+      let t', assoc' = loop t1 assoc in
+      (TyRef t', assoc')
+    | TyParaUser(t1, i) -> 
+      let t', assoc' = loop t1 assoc in
+      (TyParaUser (t', i), assoc')
     | TyVar tv1 -> 
       let tv', assoc' =  renumber_tyvar tv1 assoc in
       (TyVar tv', assoc')
-    | _ as tt -> (tt, assoc) in
+    | TyInt | TyBool | TyFloat | TyUnit | TyDummy | (TyUser _) as tt ->
+      (tt, assoc) in
+  (* | _ as tt -> (tt, assoc) in *)
   let (res, _) = loop t [] in res
 
 (* returns new type variables with fresh_tyvar() *)
 let fresh_tyvar = 
-  let counter = ref 0 in
+  let counter = ref 1 in
   let body () =
     let v = !counter in
     counter := v + 1; v
@@ -281,7 +277,7 @@ let freevar_tysc (TyScheme(b, ty)) =
     match ty with
     | TyInt | TyBool | TyFloat | TyUser _ | TyDummy | TyUnit -> MySet.empty
     | TyFun (t1, t2) -> MySet.union (loop t1) (loop t2)
-    | TyList t1 | TyRef t1 -> loop t1
+    | TyList t1 | TyRef t1 | TyParaUser(t1, _) -> loop t1
     | TyVar v -> 
       if MySet.member v bounds
       then MySet.empty

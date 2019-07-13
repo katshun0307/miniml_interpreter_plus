@@ -28,7 +28,7 @@ type exval =
   | ListV of exval list
   | TupleV of exval * exval
   | UserV of tyid
-  | UserDefV of id * ((id * ty) list)
+  | UserDefV of string option * id * ((id * ty) list)
   | ArityUserV of tyid
   | ArityAppUserV of tyid * exval
   | RecordV of id * ((id * exval ref * bool) list)
@@ -59,7 +59,7 @@ let rec string_of_exval = function
   | TupleV (v1, v2) -> "(" ^ string_of_exval v1 ^ ", " ^ string_of_exval v2 ^ ")"
   | UserV tyid -> tyid
   | ArityUserV tyid -> tyid
-  | ArityAppUserV (tyid, v) -> tyid ^ " of " ^ (string_of_exval v)
+  | ArityAppUserV (tyid, v) -> tyid ^ " " ^ (string_of_exval v)
   | RecordV (recname, contentlist) -> 
     "{" ^ Core.String.concat ~sep:"; " (List.map ~f:(fun (fname, fcontent, is_mut) -> 
         let mut_str = if is_mut then "mutable " else "" in
@@ -70,10 +70,13 @@ let rec string_of_exval = function
          let mut_str = if is_mutable then "mutable " else "" in
          mut_str ^ fname ^ " : " ^ (string_of_ty fty)) fl))
     ^ "}"
-  | UserDefV(tyname, variant_list) -> 
-    "type " ^ tyname ^ " = " ^ 
-    String.concat ~sep:"| " 
-      (List.map variant_list ~f:(fun (variant_id, content_ty) -> variant_id ^ " of " ^ (string_of_ty content_ty)))  
+  | UserDefV(tyarg_opt, tyname, variant_list) -> 
+    let tyarg_tyvar = Option.value_map tyarg_opt ~f:fresh_tyvar_annot ~default:0 in
+    let tyarg_str = Option.value tyarg_opt ~default:"" in
+    "type " ^ tyarg_str ^ " " ^ tyname ^ " = " ^ 
+    String.concat ~sep:"| "
+      (List.map variant_list ~f:(fun (variant_id, content_ty) ->
+           variant_id ^ " of " ^ (string_of_ty ~tyvar_str:[(tyarg_tyvar, tyarg_str)] content_ty)))  
   | RefV loc -> sprintf "{contents = %s}" (string_of_exval (lookup_loc loc))
   | UnitV -> "()"
 
@@ -308,7 +311,7 @@ let eval_decl env = function
       let newenv = Environment.extend id (ProcV(para, e, dummyenv)) env in 
       dummyenv := newenv;
       (id, newenv, ProcV(para, e, dummyenv)))
-  | TypeDecl(ty_name, variant_list) -> 
+  | TypeDecl(tyarg_opt, ty_name, variant_list) -> 
     let rec extend_env l accum_env = 
       match l with
       | (h, TyDummy)::t -> 
@@ -320,6 +323,6 @@ let eval_decl env = function
       | [] -> accum_env in
     let env' = extend_env variant_list env in
     (* (ty_name, env', ListV (List.map variant_list ~f:(fun (x, _) -> UserV x))) *)
-    (ty_name, env', UserDefV(ty_name, variant_list))
+    (ty_name, env', UserDefV(tyarg_opt, ty_name, variant_list))
   | RecordDecl (recname, fieldslist) -> 
     (recname, env, RecordDefV(recname, fieldslist))

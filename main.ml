@@ -41,6 +41,7 @@ let rec read_eval_print env tyenv =
     let (id, newenv, v) = eval_decl env decl in
     if not (ty_of_tysc tysc = TyDummy) then 
       (Printf.printf "val %s : " id;
+       (* print_string (string_of_ty ((ty_of_tysc tysc))); *)
        print_string (string_of_ty (renumber_ty (ty_of_tysc tysc)));
        print_string " = ")
     else ();
