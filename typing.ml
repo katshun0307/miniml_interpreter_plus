@@ -15,8 +15,8 @@ type subst = (tyvar * ty) list
 (* get list of variant names from user-defined type name *)
 let variant_env = ref (Environment.empty: (tyid * ty) list Environment.t)
 
-(* get list of record contents (field name and type) from record type name *)
-let record_env = ref (Environment.empty: (id * ty * bool) list Environment.t)
+(* get list of record contents (tyarg_name * (field name * type * is_mutable) list) from record type name *)
+let record_env = ref (Environment.empty: (string option * ((id * ty * bool) list)) Environment.t)
 
 (* printing *)
 let rec string_of_subst = function 
@@ -136,7 +136,7 @@ let type_list_to_equals l =
 let get_record_type_from_fields fieldname_list is_underbar = 
   let rec loop current_env = 
     match current_env with
-    | (spec_list, tyname):: rest -> 
+    | ((_, spec_list), tyname):: rest -> 
       let spec_fname_list = List.map ~f:(fun (fname, _, _) -> fname) spec_list in
       if MySet.equals spec_fname_list fieldname_list
       || (is_underbar && MySet.diff fieldname_list spec_fname_list = [])
@@ -223,7 +223,7 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
      | _ -> err ("cannot find type of variant : " ^ tyid))
   | IdPattern _, RecordPattern (fl, is_u) ->  
     let record_name = get_record_type_from_fields (List.map fl ~f:(fun (fname, _) -> fname)) is_u in
-    let record_specs = Environment.lookup record_name (!record_env) in
+    let _, record_specs = Environment.lookup record_name (!record_env) in
     Undecidable [RecordPattern (List.map record_specs ~f:(fun (fname, _, _) -> (fname, IdPattern "_")), is_u)]
   | IdPattern _, TuplePattern _ -> Undecidable [TuplePattern(IdPattern "_", IdPattern "_")]
   | _, UnderbarPattern -> Match
@@ -445,7 +445,7 @@ let rec ty_exp tyenv = function
            extend_pattern_env ipt pt_tyconstructor accum_tyenv accum_eqls
          | _ -> err "error in match")
       | RecordPattern (l, _), TyUser ty_id -> 
-        let ty_specs' = Environment.lookup ty_id !record_env in
+        let _, ty_specs' = Environment.lookup ty_id !record_env in
         let ty_specs = List.map ~f:(fun (a, b, c) -> (a, b)) ty_specs' in
         List.fold l ~init:(accum_tyenv, accum_eqls)
           ~f:(fun (accum_env, accum_eqls) (id, ipt) -> 
@@ -453,7 +453,7 @@ let rec ty_exp tyenv = function
               extend_pattern_env ipt correct_ty accum_env accum_eqls)
       | RecordPattern (l, _), TyVar tid -> 
         let tyname = get_record_type_from_fields (List.map ~f:(fun (fname, _) -> fname) l) true in
-        let ty_specs' = Environment.lookup tyname !record_env in
+        let _, ty_specs' = Environment.lookup tyname !record_env in
         let ty_specs = List.map ~f:(fun (a, b, c) -> (a, b)) ty_specs' in
         let tyenv', accum_eqls' =  List.fold l ~init:(accum_tyenv, accum_eqls)
             ~f:(fun (accum_tyenv, accum_eqls) (fieldname, ipt) -> 
@@ -530,11 +530,11 @@ let rec ty_exp tyenv = function
     let main_ty = TyTuple(subst_type main_subst (ty_of_tysc tysc1),subst_type main_subst (ty_of_tysc tysc2)) in
     (tysc_of_ty main_ty, [])
   | RecordExp (tyname_ref, fl) -> 
-    let record_type_name = List.Assoc.find_exn (Environment.reverse !record_env)
+    let record_type_name = get_record_type_from_fields (List.map ~f:(fun (a, _, _) -> a) fl) false in
+    (* let record_type_name = List.Assoc.find_exn (Environment.reverse !record_env)
         ~equal:(fun l1 l2 -> List.for_all l1 ~f:(fun (x, _, _) -> List.exists l2 ~f:(fun (y, _, _) -> y = x)))
-        (List.map ~f:(fun (fname, _, _) -> (fname, TyDummy, false)) fl) in
-    tyname_ref := record_type_name;
-    let record_type_specs = Environment.lookup record_type_name (!record_env) in
+        (List.map ~f:(fun (fname, _, _) -> (fname, TyDummy, false)) fl) in *)
+    let _, record_type_specs = Environment.lookup record_type_name (!record_env) in
     let rec loop accum_equals = function
       | (fname, fcontent, is_mut_ref):: rest ->
         let local_tysc, local_subst = ty_exp tyenv fcontent in
@@ -544,12 +544,13 @@ let rec ty_exp tyenv = function
       | [] -> accum_equals in
     let main_eqls = loop [] fl in
     let main_subst = unify main_eqls in
+    tyname_ref := record_type_name;
     (tysc_of_ty (TyUser record_type_name), main_subst)
   | RecordAppExp(e1, fieldname) ->
     let e1_tysc, e1_subst = ty_exp tyenv e1 in
     (match ty_of_tysc e1_tysc with
      | TyUser record_tyname -> 
-       let field_specs = Environment.lookup record_tyname (!record_env) in
+       let _, field_specs = Environment.lookup record_tyname (!record_env) in
        let target_field = List.find_exn field_specs ~f:(fun (fname, _, _) -> fname = fieldname) in
        let (_, t, _) = target_field in
        (tysc_of_ty t, e1_subst)
@@ -558,7 +559,7 @@ let rec ty_exp tyenv = function
     let e1_tysc, e1_subst = ty_exp tyenv e1 in
     (match ty_of_tysc e1_tysc with
      | TyUser record_tyname -> 
-       let field_specs = Environment.lookup record_tyname (!record_env) in
+       let _, field_specs = Environment.lookup record_tyname (!record_env) in
        let (_, target_type, is_mutable) = List.find_exn field_specs ~f:(fun (fname, _, _) -> fname = fieldname) in
        if is_mutable then 
          let e2_tysc, e2_subst = ty_exp tyenv e2 in
@@ -613,7 +614,7 @@ let rec ty_decl (tyenv: tyenv) = function
     let ty_para2 = subst_type main_subst ty_para in
     let main_ty = TyFun(ty_para2, ty_of_tysc tysc_main) in
     (tysc_of_ty main_ty, Environment.extend id (tysc_of_ty main_ty) tyenv)
-  | TypeDecl(tyarg_opt, type_name, variant_list) ->
+  | VariantDecl(tyarg_opt, type_name, variant_list) ->
     let rec append_tyenv l accum_tyenv = 
       match l with
       | (variant, TyDummy)::t -> 
@@ -631,7 +632,7 @@ let rec ty_decl (tyenv: tyenv) = function
     variant_env := Environment.extend type_name variant_list !variant_env;
     let new_tyenv = append_tyenv variant_list tyenv in
     (tysc_of_ty TyDummy, new_tyenv)
-  | RecordDecl (recname, fcontentslist) -> 
+  | RecordDecl (tyannot_opt, recname, fcontentslist) -> 
     (* make environment to remember record types *)
-    record_env := Environment.extend recname fcontentslist (!record_env);
+    record_env := Environment.extend recname (tyannot_opt, fcontentslist) (!record_env);
     (tysc_of_ty TyDummy, tyenv)

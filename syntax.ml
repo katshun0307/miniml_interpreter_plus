@@ -120,8 +120,8 @@ type program =
   | Exp of exp
   | Decl of annot_id * exp
   | RecDecl of id * id * exp
-  | TypeDecl of string option * id * ((tyid * ty) list)
-  | RecordDecl of id * ((id * ty * bool) list)
+  | VariantDecl of string option * id * ((tyid * ty) list)
+  | RecordDecl of string option * id * ((id * ty * bool) list)
 [@@deriving show]
 
 (* type scheme *)
@@ -144,12 +144,12 @@ let tyvar_string_of_int n =
     let block = (n - offset) / 26 in
     if block = 0 then "'" ^ alphabet_of_int offset
     else "'" ^ alphabet_of_int offset ^ string_of_int block in
-  if n > 0 then inner n else "'" ^ inner (-n)
+  if n >= 0 then inner n else "_" ^ inner (-n)
 
 (* optional argument tyvar_str: convert tyvars to specific string *)
 let rec string_of_ty ?tyvar_str:(tyvar_str=[]) = function
-  | TyInt ->  "int"
-  | TyBool ->  "bool"
+  | TyInt -> "int"
+  | TyBool -> "bool"
   | TyFloat -> "float"
   | TyUnit -> "unit"
   | TyVar id -> 
@@ -158,13 +158,13 @@ let rec string_of_ty ?tyvar_str:(tyvar_str=[]) = function
      | None -> tyvar_string_of_int id)
   | TyFun(a, b) -> 
     (match a with
-     | TyFun (_, _) -> "(" ^ string_of_ty a ^ ") -> " ^ string_of_ty b
-     | _ ->  string_of_ty a ^ " -> " ^ string_of_ty b )
+     | TyFun (_, _) -> "(" ^ string_of_ty ~tyvar_str a ^ ") -> " ^ string_of_ty ~tyvar_str b
+     | _ ->  string_of_ty ~tyvar_str a ^ " -> " ^ string_of_ty ~tyvar_str b )
   | TyList t -> (string_of_ty t) ^ " list"
-  | TyTuple (t1, t2) -> "(" ^ string_of_ty t1 ^ ", " ^ string_of_ty t2 ^ ")"
+  | TyTuple (t1, t2) -> "(" ^ string_of_ty ~tyvar_str t1 ^ ", " ^ string_of_ty ~tyvar_str t2 ^ ")"
   | TyUser id -> id
-  | TyParaUser(t, id) -> string_of_ty t ^ " " ^ id
-  | TyRef t1 -> string_of_ty t1 ^ " ref"
+  | TyParaUser(t, id) -> string_of_ty ~tyvar_str t ^ " " ^ id
+  | TyRef t1 -> string_of_ty ~tyvar_str t1 ^ " ref"
   | TyDummy -> "TyDummy"
 
 let string_of_eqls eqls =

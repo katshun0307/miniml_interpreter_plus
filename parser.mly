@@ -31,9 +31,10 @@ toplevel :
   | LET f=ID b=LETFUNExpr { Decl((f, None), b) } (* declaration *)
   | LET REC f=ID EQ FUN para=ID RARROW e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 1*)
   | LET REC f=ID para=ID EQ e=Expr SEMISEMI { RecDecl(f, para, e) } (* recursive declaration 2 *)
-  | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(None, ty, decls_rest) } (* variant declaration *)
-  | TYPE s=TYVARANNOT ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { TypeDecl(Some s, ty, decls_rest) } (* variant declaration *)
-  | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(recname, fields) }
+  | TYPE ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { VariantDecl(None, ty, decls_rest) } (* variant declaration *)
+  | TYPE s=TYVARANNOT ty=ID EQ decls_rest=TYDECLSExpr SEMISEMI { VariantDecl(Some s, ty, decls_rest) } (* variant declaration *)
+  | TYPE recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(None, recname, fields) }
+  | TYPE s=TYVARANNOT recname=ID EQ LCURLY fields=FieldsDeclExpr SEMISEMI { RecordDecl(Some s, recname, fields) }
 
 Expr :
   | e=IfExpr { e } (* if expression *)
@@ -49,6 +50,7 @@ Expr :
   | LPAREN e=Expr COLON ty=TypeExpr RPAREN { Annotated(e, ty) }
   | i=ID ASSIGN e=Expr { Assign(i, e) }
   | e1=Expr DOT field=ID MUTE e2=Expr { RecordMuteExp(e1, field, e2) } 
+  | DEASSIGN e=Expr { Deassign e }
 
 TypeExpr :
   | INT { TyInt }
@@ -266,7 +268,6 @@ AExpr : (* integer, boolean, variable(id), expression_with_parenthesis *)
   | i=TYID { Var (VARIANT i) }
   | LPAREN e=Expr RPAREN { e }
   | REF e=Expr { Reference e } 
-  | DEASSIGN e=Expr { Deassign e }
   | e=AnnotIdExpr { Var(ID e) } (* includes non annotated ids *)
 
 AnnotIdExpr : 
