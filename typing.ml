@@ -142,7 +142,8 @@ let get_record_type_from_fields fieldname_list is_underbar =
       || (is_underbar && MySet.diff fieldname_list spec_fname_list = [])
       then tyname
       else loop rest
-    | [] -> raise MatchNotExhaustive in
+    | [] -> printf "error in get_record_type_from_fields [%s], %b" (String.concat ~sep:"; "  fieldname_list) is_underbar;
+      raise MatchNotExhaustive in
   loop (Environment.reverse (!record_env))
 
 (* >>> check if pattern matching is exhasutive >>> *)
@@ -185,6 +186,7 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
       | _ as res -> res
     else NoMatch
   | RecordPattern (ideal_l, _), RecordPattern (current_l, is_underbar) -> 
+    (* debug *)
     let current_fields = List.map ~f:(fun (fname, _) -> fname) current_l in
     let ideal_fields = List.map ~f:(fun (fname, _) -> fname) ideal_l in
     let is_illegal_fields = not (MySet.diff current_fields ideal_fields = []) in
@@ -192,25 +194,26 @@ let rec matches (tyenv: tysc Environment.t) (ideal_p, pp) =
     if is_illegal_fields || (not is_full_cover && not is_underbar) 
     then NoMatch
     else
-      (* for each field in current_pattern, check if ideal_pattern matches *)
-      let rec loop current_patterns = 
-        match current_patterns with
-        | (fname, current_pt):: rest -> 
-          let ideal_pt = List.Assoc.find_exn ideal_l ~equal:(=) fname in
-          (match matches tyenv (ideal_pt, current_pt) with
-           | NoMatch -> NoMatch
-           | Undecidable ex_l -> 
-             NoMatch
-           | Match -> Match)
-        | [] -> Match
-      in loop current_l
+      (let rec loop ideal_patterns finished_patterns = 
+         match ideal_patterns with
+         | ((fname, ideal_p) as current_ideal_pt):: rest -> 
+           (match List.Assoc.find current_l ~equal:(=) fname with
+            | Some field_match_pt -> (* match field with fname exists *)
+              (match matches tyenv (ideal_p, field_match_pt) with
+               | Undecidable ex_l -> Undecidable (List.map ex_l ~f:(fun inner_pt -> RecordPattern((fname, inner_pt)::finished_patterns @ rest, false)))
+               | Match -> loop rest (current_ideal_pt :: finished_patterns)
+               | NoMatch -> NoMatch)
+            | None -> (* if match field does not exist *)
+              if is_underbar then loop rest (current_ideal_pt :: finished_patterns) else raise MatchFail)
+         | [] -> Match
+       in loop ideal_l [])
   | _, IdPattern _ -> Match
   | IdPattern _, ConsListPattern _ | IdPattern _, TailListPattern ->
     Undecidable [ConsListPattern(IdPattern "_", TailListPattern); TailListPattern]
   | IdPattern _, SingleVariantPattern tyid -> 
     let tysc_of_variant = Environment.lookup tyid tyenv in
     (match ty_of_tysc tysc_of_variant with
-     | TyUser tt -> 
+     | TyUser tt ->
        let variant_list = Environment.lookup tt (!variant_env) in
        Undecidable (List.map ~f:(fun (tyid, _) -> SingleVariantPattern tyid) variant_list)
      | _ -> err ("cannot find type of single variant : " ^ tyid))
@@ -252,15 +255,14 @@ let pattern_same_var_check pattern_list =
 
 let check_pattern_exhaustive tyenv pattern_list = 
   let rec sigma ideal_pattern patterns = 
-    let open Core in
     let match_flags = Core.List.map patterns ~f:(fun p -> matches tyenv (ideal_pattern, p)) in
-    (* Printf.printf "flags are [%s]\n" (String.concat ~sep:"; " (List.map ~f:string_of_match_res match_flags)); *)
+    printf "flags are [%s] for ideal_pattern %s\n" (String.concat ~sep:"; " (List.map ~f:string_of_match_res match_flags)) (string_of_pattern ideal_pattern);
     if Core.List.exists match_flags ~f:((=) Match)
     then ()
     else if Core.List.for_all match_flags ~f:((=) NoMatch)
     then
-      (Printf.eprintf "Pattern matching not exhaustive, cannot match pattern: ";
-       Printf.eprintf "%s" (string_of_pattern ideal_pattern ^ "\n");
+      (printf "Pattern matching not exhaustive, cannot match pattern: ";
+       printf "%s" (string_of_pattern ideal_pattern ^ "\n");
        raise MatchNotExhaustive)
     else 
       let rec loop_match_flags current_flags = 

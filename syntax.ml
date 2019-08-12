@@ -185,8 +185,8 @@ let rec string_of_pattern p =
   | VariantPattern (tyid, pin) -> 
     sprintf "%s(%s)" tyid (string_of_pattern pin)
   | RecordPattern (l, _) -> 
-    String.concat ~sep:"; " 
-      (List.map l ~f:(fun (fname, p) -> sprintf "%s = %s" fname (string_of_pattern p)))
+    "{" ^ String.concat ~sep:"; " 
+      (List.map l ~f:(fun (fname, p) -> sprintf "%s = %s" fname (string_of_pattern p)))  ^ "}"
   | IdPattern i -> i
   | UnderbarPattern -> "__"
 
