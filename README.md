@@ -31,9 +31,6 @@ This directory contains the following files.
   implemented by students.)
 - `test.ml`: Test file. Run test with `./miniml -test`.
 - `Makefile`: Makefile interpreted by `make`.
-- `OCamlMakefile`: A skelton of a makefile for an OCaml project
-  provided by ocaml-makefile
-  (http://mmottl.github.io/ocaml-makefile/).
 
 After typing `make`, the OCaml compiler generates many intermediate
 files.  Important files among them are following.
