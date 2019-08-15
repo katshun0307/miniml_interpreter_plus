@@ -181,33 +181,34 @@ TupleExpr :
 
 (* logical expressions *)
 ORExpr : (* or *)
-  | l=ORExpr OR r=ANDExpr { LogicOp (Or, l, r) }
+  | l=ORExpr OR r=Expr { LogicOp (Or, l, r) }
   | e=ANDExpr { e }
 
 ANDExpr : (* and *)
-  | l=ANDExpr AND r=EqualExpr { LogicOp (And, l, r) }
+  | l=ANDExpr AND r=Expr { LogicOp (And, l, r) }
   | e=EqualExpr { e }
 
 EqualExpr : 
-  | l=EqualExpr EQ r=LTExpr { BinOp (Eq, l, r) }
+  | l=EqualExpr EQ r=Expr { BinOp (Eq, l, r) }
   | e=LTExpr { e }
 
 (* number expressions *)
 LTExpr : (* less than expression *)
+  | l=LTExpr LT r=Expr { BinOp (Lt, l, r) }
+  | l=LTExpr FLT r=Expr { BinOp (FLt, l, r) }
   | l=LTExpr LT r=AdditionExpr { BinOp (Lt, l, r) }
   | l=LTExpr FLT r=AdditionExpr { BinOp (FLt, l, r) }
   | e=AdditionExpr { e }
 
 AdditionExpr : (* addition *)
-  | l=AdditionExpr PLUS r=SubtractionExpr { BinOp (Plus, l, r) }
-  | l=AdditionExpr FPLUS r=SubtractionExpr { BinOp (FPlus, l, r) }
-  | FLOAT_OF_INT e=AdditionExpr { Float_of_int e }
-  | INT_OF_FLOAT e=AdditionExpr { Int_of_float e }
-  | e=SubtractionExpr { e }
-
-SubtractionExpr : (* subtraction *)
-  | l=SubtractionExpr MINUS r=MultExpr { BinOp (Minus, l, r) }
-  | l=SubtractionExpr FMINUS r=MultExpr { BinOp (FMinus, l, r) }
+  | l=AdditionExpr PLUS r=MultExpr { BinOp (Plus, l, r) }
+  | l=AdditionExpr FPLUS r=MultExpr { BinOp (FPlus, l, r) }
+  | l=AdditionExpr MINUS r=MultExpr { BinOp (Minus, l, r) }
+  | l=AdditionExpr FMINUS r=MultExpr { BinOp (FMinus, l, r) }
+  | l=AdditionExpr PLUS r=Expr { BinOp (Plus, l, r) }
+  | l=AdditionExpr FPLUS r=Expr { BinOp (FPlus, l, r) }
+  | l=AdditionExpr MINUS r=Expr { BinOp (Minus, l, r) }
+  | l=AdditionExpr FMINUS r=Expr { BinOp (FMinus, l, r) }
   | e=MultExpr { e }
 
 MultExpr : (* multiplication *)

@@ -108,6 +108,15 @@ let binop_tests = "binary operation tests" >::: [
                              {ty = TyInt; v = Some (IntV 0)}
                              (test_eval_loop ["3 / 4 * 3 % 2 / 5 % 3 * 3;;"])
                          );
+    "priority test7" >:: (fun _ -> assert_equal_content 
+                             {ty = TyBool; v = Some (BoolV true)}
+                             (test_eval_loop ["true && let x = false in x || true"])
+                         );
+    "priority test8" >:: (fun _ -> assert_equal_content 
+                             {ty = TyInt; v = Some (IntV 119)}
+                             (test_eval_loop ["3 + let x = 4 in x * 4 + 100;;"])
+                         );
+
   ]
 
 let float_binop_tests = "float binary operation tests" >::: [
@@ -122,14 +131,6 @@ let float_binop_tests = "float binary operation tests" >::: [
     "test2" >:: (fun _ -> assert_equal_content 
                     {ty = TyBool; v = Some (BoolV true)}
                     (test_eval_loop ["2. = 2."])
-                );
-    "test3" >:: (fun _ -> assert_equal_content 
-                    {ty = TyBool; v = Some (BoolV true)}
-                    (test_eval_loop ["2. <. 5. && 3. <. 8.;"])
-                );
-    "test4" >:: (fun _ -> assert_equal_content 
-                    {ty = TyBool; v = Some (BoolV false)}
-                    (test_eval_loop ["0.5 <. 0.2 || 5 < 3 || false"])
                 );
   ]
 
